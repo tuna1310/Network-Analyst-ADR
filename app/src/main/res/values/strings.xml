@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Network Analyst</string>
+    <string name="nav_network_info">Network</string>
+    <string name="nav_lan_scanner">LAN Scan</string>
+    <string name="nav_ping">Ping</string>
+    <string name="nav_traceroute">Traceroute</string>
+    <string name="nav_port_scanner">Port Scan</string>
+    <string name="nav_dns">DNS</string>
+    <string name="nav_history">History</string>
+
+    <!-- Scan Warning Dialog -->
+    <string name="scan_warning_title">Network Scan Warning</string>
+    <string name="scan_warning_message">Only scan networks you own or are legally authorized to test.\n\nPort scanning or device discovery without authorization may trigger Intrusion Detection Systems (IDS/IPS), violate security policies, or breach relevant regulations.</string>
+    <string name="scan_warning_confirm">I Understand &amp; Proceed</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Port Scanner -->
+    <string name="port_scan_mode_common">Common</string>
+    <string name="port_scan_mode_custom">Custom</string>
+    <string name="port_scan_mode_full">1 - 65535</string>
+    <string name="port_scan_start">Start Port Scan</string>
+    <string name="port_scan_stop">Stop Scan</string>
+    <string name="port_scan_pause">Pause</string>
+    <string name="port_scan_resume">Resume</string>
+    <string name="port_scan_confirm_full_title">Confirm Full Range Scan</string>
+    <string name="port_scan_confirm_full_message">Scanning all 65,535 ports may take several minutes (approx. %1$d seconds). Do you want to continue?</string>
+    <string name="port_state_open">Open</string>
+    <string name="port_state_closed">Closed</string>
+    <string name="port_state_filtered">Filtered</string>
+    <string name="port_state_error">Error</string>
+</resources>

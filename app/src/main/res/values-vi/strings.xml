@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Network Analyst</string>
+    <string name="nav_network_info">Mạng</string>
+    <string name="nav_lan_scanner">Quét LAN</string>
+    <string name="nav_ping">Ping</string>
+    <string name="nav_traceroute">Traceroute</string>
+    <string name="nav_port_scanner">Quét cổng</string>
+    <string name="nav_dns">DNS</string>
+    <string name="nav_history">Lịch sử</string>
+
+    <!-- Hộp thoại cảnh báo quét mạng -->
+    <string name="scan_warning_title">Cảnh báo quét mạng</string>
+    <string name="scan_warning_message">Chỉ quét mạng do bạn sở hữu hoặc được ủy quyền hợp pháp.\n\nViệc dò quét cổng hoặc thiết bị mạng không có sự cho phép có thể kích hoạt hệ thống phát hiện xâm nhập (IDS/IPS), vi phạm chính sách an toàn thông tin hoặc quy định pháp luật.</string>
+    <string name="scan_warning_confirm">Tôi hiểu &amp; Tiếp tục</string>
+    <string name="cancel">Hủy bỏ</string>
+
+    <!-- Quét cổng -->
+    <string name="port_scan_mode_common">Phổ biến</string>
+    <string name="port_scan_mode_custom">Tùy chọn</string>
+    <string name="port_scan_mode_full">1 - 65535</string>
+    <string name="port_scan_start">Bắt đầu quét cổng</string>
+    <string name="port_scan_stop">Dừng quét</string>
+    <string name="port_scan_pause">Tạm dừng</string>
+    <string name="port_scan_resume">Tiếp tục</string>
+    <string name="port_scan_confirm_full_title">Xác nhận quét 65.535 cổng</string>
+    <string name="port_scan_confirm_full_message">Quá trình quét toàn bộ 65.535 cổng có thể mất vài phút (khoảng %1$d giây). Bạn có chắc chắn muốn bắt đầu?</string>
+    <string name="port_state_open">Mở</string>
+    <string name="port_state_closed">Đóng</string>
+    <string name="port_state_filtered">Bị chặn</string>
+    <string name="port_state_error">Lỗi</string>
+</resources>

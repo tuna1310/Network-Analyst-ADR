@@ -1,0 +1,58 @@
+*.iml
+.gradle
+.kotlin/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+app/build/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file
+local.properties
+
+# Proguard
+proguard/
+
+# Log & temp Files
+*.log
+test_output.txt
+original_PortScannerService.txt
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Captures
+captures/
+
+# IntelliJ IDEA
+*.iml
+.idea/
+
+# Keystore files
+*.jks
+*.keystore
