@@ -55,6 +55,15 @@ class DnsViewModel @Inject constructor(
         _customResolverIp.value = ip
     }
 
+    fun getAvailableResolvers(): List<DnsResolver> {
+        val systemDns = dnsService.getSystemDnsServer()
+        return if (systemDns.isNullOrEmpty()) {
+            DnsService.PRESET_RESOLVERS.filter { it.primaryIp != "SYSTEM" }
+        } else {
+            DnsService.PRESET_RESOLVERS
+        }
+    }
+
     fun queryDns(activity: Activity? = null) {
         adService.recordToolAction(activity)
         viewModelScope.launch {

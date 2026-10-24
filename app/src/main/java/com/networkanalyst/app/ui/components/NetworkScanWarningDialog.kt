@@ -31,6 +31,11 @@ object WarningPreferences {
     }
 }
 
+object ScanPolicyHelper {
+    fun shouldShowWarning(isAccepted: Boolean): Boolean = !isAccepted
+    fun canProceedWithScan(isAccepted: Boolean): Boolean = isAccepted
+}
+
 @Composable
 fun NetworkScanWarningDialog(
     onDismiss: () -> Unit,

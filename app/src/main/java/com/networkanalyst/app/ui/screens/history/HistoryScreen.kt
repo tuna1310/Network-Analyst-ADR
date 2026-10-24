@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Speed
@@ -354,5 +355,6 @@ fun getToolIcon(type: ToolType): ImageVector {
         ToolType.TRACEROUTE -> Icons.Default.Timeline
         ToolType.PORT_SCAN -> Icons.Default.NetworkCheck
         ToolType.DNS -> Icons.Default.Dns
+        ToolType.WHOIS -> Icons.Default.Public
     }
 }

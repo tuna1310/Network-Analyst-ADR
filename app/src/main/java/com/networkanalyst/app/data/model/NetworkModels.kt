@@ -6,7 +6,8 @@ enum class ToolType(val displayName: String) {
     PING("Ping"),
     TRACEROUTE("Traceroute"),
     PORT_SCAN("Quét cổng"),
-    DNS("Tra cứu DNS")
+    DNS("Tra cứu DNS"),
+    WHOIS("Whois / RDAP")
 }
 
 data class NetworkInfoData(
@@ -95,7 +96,9 @@ data class TracerouteHop(
     val hostname: String? = null,
     val rttMs: Double? = null,
     val isTimeout: Boolean = false,
-    val isDestination: Boolean = false
+    val isDestination: Boolean = false,
+    val geoCountry: String? = null,
+    val geoCountryCode: String? = null
 )
 
 enum class PortState {
@@ -142,4 +145,48 @@ data class DnsRecordItem(
     val ttlSeconds: Long,
     val priority: Int? = null,
     val rawText: String
+)
+
+enum class WhoisQueryType {
+    DOMAIN,
+    IP,
+    ASN
+}
+
+enum class WhoisSource {
+    RDAP_IANA,
+    RDAP_ORG_FALLBACK,
+    WHOIS_PORT_43
+}
+
+data class WhoisSummary(
+    val entityName: String? = null,
+    val registrar: String? = null,
+    val createdDate: String? = null,
+    val expiresDate: String? = null,
+    val updatedDate: String? = null,
+    val statuses: List<String> = emptyList(),
+    val cidr: String? = null,
+    val nameservers: List<String> = emptyList(),
+    val contactEmail: String? = null,
+    val asnNumber: String? = null,
+    val asnName: String? = null
+)
+
+data class WhoisResult(
+    val target: String,
+    val queryType: WhoisQueryType,
+    val source: WhoisSource,
+    val summary: WhoisSummary,
+    val rawContent: String,
+    val queryTimeMs: Long
+)
+
+data class GeoIpInfo(
+    val ip: String,
+    val country: String? = null,
+    val countryCode: String? = null,
+    val city: String? = null,
+    val isp: String? = null,
+    val isPrivate: Boolean = false
 )

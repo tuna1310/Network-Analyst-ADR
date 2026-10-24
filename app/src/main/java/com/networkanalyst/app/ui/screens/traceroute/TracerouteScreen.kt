@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -54,10 +55,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.TracerouteHop
 import com.networkanalyst.app.ui.components.AdBannerComposable
 import kotlinx.coroutines.launch
@@ -69,6 +72,7 @@ fun TracerouteScreen(
 ) {
     val state by viewModel.tracerouteState.collectAsState()
     val target by viewModel.targetHost.collectAsState()
+    val enableGeoIp by viewModel.enableGeoIp.collectAsState()
 
     val context = LocalContext.current
     val activity = context as? Activity
@@ -140,6 +144,31 @@ fun TracerouteScreen(
                         TracePresetChip("1.1.1.1 (Cloudflare)", target == "1.1.1.1") { viewModel.setTarget("1.1.1.1") }
                         TracePresetChip("8.8.8.8 (Google)", target == "8.8.8.8") { viewModel.setTarget("8.8.8.8") }
                         TracePresetChip("google.com", target == "google.com") { viewModel.setTarget("google.com") }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.traceroute_geoip_label),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = stringResource(R.string.traceroute_geoip_desc),
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = enableGeoIp,
+                            onCheckedChange = { viewModel.setEnableGeoIp(it) }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -226,6 +255,16 @@ fun TracerouteScreen(
                 items(state.hops, key = { it.hop }) { hop ->
                     TracerouteHopRow(hop = hop)
                 }
+                if (enableGeoIp && state.hops.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.traceroute_geoip_source),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -290,12 +329,26 @@ fun TracerouteHopRow(hop: TracerouteHop) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = hop.ip,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Text(
+                            text = hop.ip,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (hop.geoCountry != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "(${hop.geoCountry})",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                     if (hop.rttMs != null) {
                         Text(
                             text = "${"%.1f".format(hop.rttMs)} ms",

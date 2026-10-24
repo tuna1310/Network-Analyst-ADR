@@ -30,15 +30,22 @@ data class TracerouteSessionState(
 )
 
 @Singleton
-class TracerouteService @Inject constructor() {
+class TracerouteService @Inject constructor(
+    private val geoIpService: GeoIpService
+) {
     private val _tracerouteState = MutableStateFlow(TracerouteSessionState())
     val tracerouteState: StateFlow<TracerouteSessionState> = _tracerouteState.asStateFlow()
 
     private var traceJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    fun startTraceroute(host: String, maxHops: Int = 30) {
+    fun startTraceroute(
+        host: String,
+        maxHops: Int = 30,
+        enableGeoIp: Boolean = false
+    ) {
         stopTraceroute()
+        geoIpService.resetSession()
 
         traceJob = scope.launch {
             val cleanHost = host.trim()
@@ -154,6 +161,18 @@ class TracerouteService @Inject constructor() {
                         )
                         hopsList.add(hop)
                         _tracerouteState.value = _tracerouteState.value.copy(hops = hopsList.toList())
+
+                        if (enableGeoIp) {
+                            scope.launch {
+                                val geo = geoIpService.lookup(parsed.ip)
+                                val updatedHops = _tracerouteState.value.hops.map { h ->
+                                    if (h.hop == ttl && h.ip == parsed.ip) {
+                                        h.copy(geoCountry = geo.country, geoCountryCode = geo.countryCode)
+                                    } else h
+                                }
+                                _tracerouteState.value = _tracerouteState.value.copy(hops = updatedHops)
+                            }
+                        }
 
                         if (parsed.isDestinationReached) {
                             break

@@ -28,13 +28,23 @@ class TracerouteViewModel @Inject constructor(
     private val _targetHost = MutableStateFlow("1.1.1.1")
     val targetHost: StateFlow<String> = _targetHost.asStateFlow()
 
+    private val _enableGeoIp = MutableStateFlow(false)
+    val enableGeoIp: StateFlow<Boolean> = _enableGeoIp.asStateFlow()
+
     fun setTarget(host: String) {
         _targetHost.value = host
     }
 
+    fun setEnableGeoIp(enabled: Boolean) {
+        _enableGeoIp.value = enabled
+    }
+
     fun startTraceroute(activity: Activity? = null) {
         adService.recordToolAction(activity)
-        tracerouteService.startTraceroute(_targetHost.value)
+        tracerouteService.startTraceroute(
+            host = _targetHost.value,
+            enableGeoIp = _enableGeoIp.value
+        )
     }
 
     fun stopTraceroute() {

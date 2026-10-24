@@ -179,7 +179,7 @@ fun DnsScreen(
                             expanded = expandedResolverDropdown,
                             onDismissRequest = { expandedResolverDropdown = false }
                         ) {
-                            DnsService.PRESET_RESOLVERS.forEach { item ->
+                            viewModel.getAvailableResolvers().forEach { item ->
                                 DropdownMenuItem(
                                     text = {
                                         Column {

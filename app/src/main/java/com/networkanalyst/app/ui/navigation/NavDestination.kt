@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
@@ -17,6 +18,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Traceroute : Screen("traceroute", "Trace", Icons.Default.Timeline)
     object PortScan : Screen("port_scan", "Cổng", Icons.Default.NetworkCheck)
     object Dns : Screen("dns", "DNS", Icons.Default.Dns)
+    object Whois : Screen("whois", "Whois", Icons.Default.Public)
     object History : Screen("history", "Lịch sử", Icons.Default.History)
 }
 
@@ -27,5 +29,6 @@ val bottomNavScreens = listOf(
     Screen.Traceroute,
     Screen.PortScan,
     Screen.Dns,
+    Screen.Whois,
     Screen.History
 )

@@ -28,4 +28,17 @@
     <string name="port_state_closed">Closed</string>
     <string name="port_state_filtered">Filtered</string>
     <string name="port_state_error">Error</string>
+
+    <!-- Traceroute GeoIP -->
+    <string name="traceroute_geoip_label">Show country for each hop</string>
+    <string name="traceroute_geoip_desc">Public IPs are sent to ipwho.is via HTTPS. Private/LAN IPs are never sent.</string>
+    <string name="traceroute_geoip_source">GeoIP data provided by ipwho.is</string>
+
+    <!-- Whois / RDAP -->
+    <string name="nav_whois">Whois / RDAP</string>
+    <string name="whois_query_button">Query Whois / RDAP</string>
+    <string name="whois_tab_summary">Summary</string>
+    <string name="whois_tab_raw">Raw</string>
+    <string name="whois_copy_raw">Copy</string>
+    <string name="whois_copied">Copied to clipboard!</string>
 </resources>

@@ -39,17 +39,24 @@
 
 ### 3. Công cụ Ping độ tin cậy cao
 - Hỗ trợ cả 2 cơ chế:
-  - **Lệnh ping hệ thống qua `ProcessBuilder` (Ưu tiên)**: Gọi trực tiếp `/system/bin/ping` với các tham số `-c <count> -W <timeoutSec> <target>`. Bộ phân tích `PingOutputParser` đa biến thể trích xuất dữ liệu từng gói tin (`bytes`, `seq`, `ttl`, `time ms`, `time<1 ms`) và bảng thống kê truyền/nhận, tỷ lệ mất gói (`% packet loss`), độ trễ `min/avg/max/mdev`. Hỗ trợ bọc `withTimeoutOrNull` và `destroyForcibly()` chống treo process.
+  - **Lệnh ping hệ thống qua `ProcessBuilder` (Ưu tiên)**: Gọi trực tiếp `/system/bin/ping` với các tham số `-c <count> -W <timeoutSec> <target>`.
+    > [!NOTE]
+    > **Thực tế về lệnh ping trên Android**: Các ứng dụng Android thông thường hoàn toàn có thể thực thi `/system/bin/ping` mà không cần quyền root. Thách thức kỹ thuật thực sự nằm ở việc các nhà sản xuất thiết bị (OEM như Samsung, Xiaomi, Google Pixel) sử dụng các bản dựng binary khác nhau (toybox, iputils, bản tùy biến riêng của hãng) dẫn đến sự khác biệt về cờ tham số (ví dụ `-t` vs `-m`) và định dạng chuỗi đầu ra.
+    > Ứng dụng đã giải quyết vấn đề này bằng bộ phân tích `PingOutputParser` đa biến thể trích xuất linh hoạt dữ liệu từng gói tin (`bytes`, `seq`, `ttl`, `time ms`, `time<1 ms`) và bảng thống kê truyền/nhận, tỷ lệ mất gói (`% packet loss`), độ trễ `min/avg/max/mdev`. Hỗ trợ bọc `withTimeoutOrNull` và `destroyForcibly()` chống treo process.
   - **`InetAddress.isReachable(timeout)` (Dự phòng cuối cùng)**:
     > [!IMPORTANT]
     > **Lưu ý kỹ thuật về `InetAddress.isReachable` trên Android**:
     > Trên thiết bị Android không root, ứng dụng thông thường không có quyền mở raw ICMP socket (`CAP_NET_RAW`). Vì vậy, `isReachable()` sẽ cố gắng gửi ICMP echo request, nhưng khi bị từ chối quyền sẽ tự động chuyển sang thử kết nối TCP port 7 (Echo). Do hầu hết máy chủ hiện đại chặn cổng TCP 7, phương thức này có thể trả về `false` ngay cả khi máy chủ đang online hoặc RTT không phản ánh đúng ICMP RTT thực tế. Ứng dụng chỉ dùng cơ chế này làm giải pháp dự phòng khi binary ping hệ thống không khả dụng.
 
-### 4. Công cụ Traceroute với TTL tăng dần
+### 4. Công cụ Traceroute với TTL tăng dần & Tùy chọn GeoIP
 - Sử dụng tiện ích ping hệ điều hành với cờ `-t <ttl>`, tăng dần TTL từ `1` đến `30`.
 - Bắt gói tin ICMP `Time to live exceeded` qua `TracerouteOutputParser` để xác định địa chỉ IP và độ trễ tại từng router trung gian.
 - **Tương thích nhà sản xuất (OEM)**: Tự động phát hiện nếu binary ping trên thiết bị (Samsung, Xiaomi, Pixel, toybox) không hỗ trợ cờ `-t` và báo lỗi rõ ràng thay vì hiện toàn bộ hop timeout.
 - Bọc timeout cho từng hop và gọi `process.destroyForcibly()` khi dừng hoặc timeout, tránh rò rỉ tiến trình chạy ngầm.
+- **Tùy chọn hiển thị quốc gia từng hop (GeoIP)**:
+  - Công tắc "Hiện quốc gia của từng hop" (Mặc định: **TẮT**), kèm thông báo giải thích IP sẽ được gửi tới dịch vụ bên thứ ba.
+  - Tự động bỏ qua các IP nội bộ / Private / CGNAT (100.64.0.0/10) / Loopback, hiển thị nhãn "Private / LAN" mà **không gửi bất kỳ yêu cầu nào ra Internet**.
+  - Dữ liệu cung cấp qua HTTPS bởi `ipwho.is`, có bộ nhớ đệm (cache), giới hạn tốc độ và xử lý lỗi mềm dẻo. Tra cứu bất đồng bộ không làm chậm tiến trình traceroute.
 
 ### 5. Quét cổng mạng (Port Scanner)
 - Chạy hoàn toàn trên `Dispatchers.IO` thông qua Coroutines.
@@ -92,9 +99,37 @@
   - **Thông số Wi-Fi**: Tên mạng (SSID), BSSID, RSSI (dBm), % tín hiệu, tần số (MHz), kênh sóng (Channel), tốc độ liên kết (Link Speed Mbps), chuẩn Wi-Fi (2.4 GHz, 5 GHz, 6 GHz Wi-Fi 6E/7).
   - **Thông tin WAN / Internet công cộng**: Tự động tra cứu địa chỉ IP công cộng (Public IP), nhà cung cấp Internet (ISP), và vị trí địa lý.
 
-### 8. Lịch sử kiểm tra (Room Database)
-- Lưu trữ mọi kết quả quét mạng, Ping, Traceroute, Quét cổng, DNS.
+### 8. Tra cứu Whois / RDAP (Tên miền, IP, ASN)
+- **Ưu tiên chuẩn RDAP hiện đại**:
+  - Tra cứu cấu trúc thông qua IANA Bootstrap Registry (`data.iana.org/rdap/`): `dns.json` cho tên miền/TLD, `ipv4.json` & `ipv6.json` cho dải IP, và `asn.json` cho Autonomous System Numbers (ASN).
+  - Có cơ chế lưu đệm (cache) file bootstrap để giảm thiểu truy vấn mạng.
+  - Dự phòng qua `rdap.org` chỉ khi IANA bootstrap không tìm thấy máy chủ phân giải ủy quyền.
+  - Xử lý đầy đủ HTTP Redirect (301, 302, 307, 308), 404 (Không tìm thấy), 429 (Bị giới hạn tốc độ), và timeout kết nối.
+- **Dự phòng Whois giao thức TCP Cổng 43**:
+  - Truy vấn `whois.iana.org` trên cổng 43 để tìm máy chủ quản lý ủy quyền (`refer: <server>`).
+  - Tự động truy vấn máy chủ referral tiếp theo (tối đa 3 lần chuyển tiếp).
+  - Cơ chế bảo vệ SSRF: Xác thực địa chỉ referral, nghiêm cấm chuyển tiếp tới các IP nội bộ / localhost (`127.0.0.1`, RFC 1918).
+  - Giới hạn dung lượng nhận dữ liệu tối đa 64 KB và thời gian chờ 5 giây.
+- **Chế độ hiển thị linh hoạt**:
+  - **Chế độ Tóm tắt (Summary)**: Chủ sở hữu, đơn vị đăng ký (Registrar), ngày tạo, ngày hết hạn, ngày cập nhật, trạng thái, dải CIDR, máy chủ tên miền (Nameservers), liên hệ lạm dụng/kỹ thuật.
+  - **Chế độ Dữ liệu thô (Raw)**: Hiển thị đầy đủ JSON (RDAP) hoặc Text (Whois) với font chữ Monospace và nút sao chép nhanh vào bộ nhớ tạm.
+
+### 9. Lịch sử kiểm tra (Room Database)
+- Lưu trữ mọi kết quả quét mạng, Ping, Traceroute, Quét cổng, DNS, Whois/RDAP.
 - Hỗ trợ lọc theo từng công cụ, tìm kiếm nhanh theo từ khóa mục tiêu, sao chép kết quả vào bộ nhớ tạm, và xóa lịch sử.
+
+---
+
+## 📋 Lộ trình các tính năng tiếp theo (Mốc 3)
+Các tính năng sau đã được quy hoạch hoàn thiện trong Mốc 3:
+1. **Hỗ trợ IPv6 toàn diện**: Hiển thị địa chỉ IPv6 trong Quét LAN (qua mDNS/NsdManager); hỗ trợ đích đến IPv6 cho Ping và Traceroute; hiển thị cả IPv4 và IPv6 cho Internet công cộng.
+2. **Reverse DNS (PTR) cho LAN Scanner**: Bổ sung cơ chế tra cứu PTR record phân giải hostname cho các thiết bị LAN sau mDNS và NetBIOS.
+3. **Chi tiết kết nối mạng nâng cao**:
+   - Nhận diện chuẩn bảo mật Wi-Fi: WPA, WPA2, WPA3, Open (WPA3-SAE, WPA2-PSK).
+   - Loại mạng di động thế hệ mới (4G LTE / 5G SA / 5G NSA) và thông tin cấu hình SIM qua `SubscriptionManager` (kèm xin quyền `READ_PHONE_STATE` với màn hình giải thích minh bạch).
+   - Nhận diện kết nối mạng qua cổng chuyển đổi USB Ethernet (`NetworkCapabilities.TRANSPORT_ETHERNET`).
+4. **DNS Đa truy vấn**: Tùy chọn truy vấn đồng thời tất cả các loại bản ghi DNS (`ANY` / batch query).
+5. **Rà soát quyền riêng tư (Privacy Audit)**: Liệt kê chi tiết mọi endpoint bên ngoài (ipify, ipwho.is, IANA, rdap.org, DNS Resolvers), đảm bảo 100% sử dụng HTTPS và rà soát triệt để mọi chuỗi ký tự trên UI qua `strings.xml`.
 
 ---
 

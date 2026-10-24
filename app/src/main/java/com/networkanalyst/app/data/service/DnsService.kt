@@ -102,6 +102,10 @@ class DnsService @Inject constructor(
         }
     }
 
+    fun getSystemDnsServer(): String? {
+        return diagnosticsHelper.getNetworkInfoSnapshot().dnsServers.firstOrNull()
+    }
+
     suspend fun query(
         domain: String,
         recordType: DnsRecordType,
@@ -126,8 +130,18 @@ class DnsService @Inject constructor(
 
         val targetResolverIp = when (resolver.primaryIp) {
             "SYSTEM" -> {
-                val systemDns = diagnosticsHelper.getNetworkInfoSnapshot().dnsServers.firstOrNull()
-                systemDns ?: "1.1.1.1"
+                val systemDns = getSystemDnsServer()
+                if (systemDns.isNullOrEmpty()) {
+                    _dnsState.value = DnsQueryState(
+                        isLoading = false,
+                        domain = cleanDomain,
+                        recordType = recordType,
+                        resolver = resolver,
+                        errorMessage = "Không tìm thấy máy chủ DNS hệ thống từ kết nối mạng hiện tại. Vui lòng chọn một máy chủ DNS công cộng (Cloudflare, Google) hoặc nhập IP tùy chỉnh."
+                    )
+                    return
+                }
+                systemDns
             }
             "CUSTOM" -> {
                 val custom = customResolverIp?.trim()

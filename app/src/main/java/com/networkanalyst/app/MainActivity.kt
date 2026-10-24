@@ -41,6 +41,8 @@ import com.networkanalyst.app.ui.screens.portscan.PortScanScreen
 import com.networkanalyst.app.ui.screens.portscan.PortScanViewModel
 import com.networkanalyst.app.ui.screens.traceroute.TracerouteScreen
 import com.networkanalyst.app.ui.screens.traceroute.TracerouteViewModel
+import com.networkanalyst.app.ui.screens.whois.WhoisScreen
+import com.networkanalyst.app.ui.screens.whois.WhoisViewModel
 import com.networkanalyst.app.ui.theme.NetworkAnalystTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -140,6 +142,10 @@ fun MainAppNavigation() {
             composable(Screen.Dns.route) {
                 val vm = hiltViewModel<DnsViewModel>()
                 DnsScreen(viewModel = vm)
+            }
+            composable(Screen.Whois.route) {
+                val vm = hiltViewModel<WhoisViewModel>()
+                WhoisScreen(viewModel = vm)
             }
             composable(Screen.History.route) {
                 val vm = hiltViewModel<HistoryViewModel>()

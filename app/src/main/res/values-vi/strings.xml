@@ -28,4 +28,17 @@
     <string name="port_state_closed">Đóng</string>
     <string name="port_state_filtered">Bị chặn</string>
     <string name="port_state_error">Lỗi</string>
+
+    <!-- Traceroute GeoIP -->
+    <string name="traceroute_geoip_label">Hiện quốc gia của từng hop</string>
+    <string name="traceroute_geoip_desc">IP công cộng được gửi tới ipwho.is qua HTTPS. Không gửi IP nội bộ/LAN.</string>
+    <string name="traceroute_geoip_source">Dữ liệu vị trí cung cấp bởi ipwho.is</string>
+
+    <!-- Whois / RDAP -->
+    <string name="nav_whois">Whois / RDAP</string>
+    <string name="whois_query_button">Tra cứu Whois / RDAP</string>
+    <string name="whois_tab_summary">Tóm tắt</string>
+    <string name="whois_tab_raw">Dữ liệu thô (Raw)</string>
+    <string name="whois_copy_raw">Sao chép</string>
+    <string name="whois_copied">Đã sao chép vào bộ nhớ tạm!</string>
 </resources>
