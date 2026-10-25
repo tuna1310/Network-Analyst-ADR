@@ -55,10 +55,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.DnsRecordItem
 import com.networkanalyst.app.data.model.DnsRecordType
 import com.networkanalyst.app.data.service.DnsService
@@ -86,16 +88,16 @@ fun DnsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tra cứu DNS (Records)", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.dns_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     if (state.results.isNotEmpty()) {
                         IconButton(onClick = {
                             viewModel.saveResultsToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả DNS vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.dns_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -126,14 +128,14 @@ fun DnsScreen(
                     OutlinedTextField(
                         value = domain,
                         onValueChange = { viewModel.setDomain(it) },
-                        label = { Text("Tên miền (Domain)") },
-                        placeholder = { Text("google.com hoặc example.com") },
+                        label = { Text(stringResource(R.string.dns_domain_label)) },
+                        placeholder = { Text(stringResource(R.string.dns_domain_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (domain.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setDomain("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                                 }
                             }
                         }
@@ -141,7 +143,7 @@ fun DnsScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text("Loại bản ghi DNS:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.dns_record_type_label), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
 
                     FlowRow(
@@ -152,14 +154,20 @@ fun DnsScreen(
                             FilterChip(
                                 selected = recordType == t,
                                 onClick = { viewModel.setRecordType(t) },
-                                label = { Text(t.name, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                label = {
+                                    Text(
+                                        if (t == DnsRecordType.ALL) stringResource(R.string.dns_record_type_all) else t.name,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text("Máy chủ DNS Resolver:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.dns_resolver_label), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
 
                     ExposedDropdownMenuBox(
@@ -201,7 +209,7 @@ fun DnsScreen(
                         OutlinedTextField(
                             value = customIp,
                             onValueChange = { viewModel.setCustomResolverIp(it) },
-                            label = { Text("Địa chỉ IP máy chủ DNS tùy chỉnh") },
+                            label = { Text(stringResource(R.string.dns_custom_resolver_label)) },
                             placeholder = { Text("1.1.1.1") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -218,20 +226,21 @@ fun DnsScreen(
                         if (state.isLoading) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Đang truy vấn DNS...")
+                            Text(stringResource(R.string.dns_status_querying))
                         } else {
                             Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Truy vấn DNS")
+                            Text(stringResource(R.string.dns_btn_query))
                         }
                     }
                 }
             }
 
-            if (state.errorMessage != null) {
+            val error = state.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = state.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -245,13 +254,13 @@ fun DnsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Bản ghi ${state.recordType.name} (${state.results.size})",
+                    text = stringResource(R.string.dns_results_title, state.results.size, state.queryTimeMs),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
                 if (state.queryTimeMs > 0) {
                     Text(
-                        text = "Thời gian: ${state.queryTimeMs} ms",
+                        text = "${state.queryTimeMs} ms",
                         fontSize = 12.sp,
                         color = Color(0xFF2E7D32),
                         fontWeight = FontWeight.SemiBold
@@ -269,7 +278,7 @@ fun DnsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nhập tên miền và nhấn 'Truy vấn DNS' để xem các bản ghi.",
+                        text = stringResource(R.string.dns_empty_prompt),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -335,7 +344,7 @@ fun DnsRecordRow(record: DnsRecordItem) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Loại: ${record.type.name}",
+                        text = record.type.name,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold

@@ -5,6 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Kiểm thử bộ phân tích chuỗi đầu ra của lệnh traceroute qua ping ttl.
+ * Lưu ý: Toàn bộ mẫu đầu vào trong test suite này là fixture tự soạn theo định dạng chuẩn
+ * của iputils và toybox (chưa được kiểm chứng thực tế trên từng thiết bị phần cứng của các hãng máy).
+ */
 class TracerouteOutputParserTest {
 
     @Test

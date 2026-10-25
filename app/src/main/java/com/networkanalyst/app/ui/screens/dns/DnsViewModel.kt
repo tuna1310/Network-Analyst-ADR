@@ -81,13 +81,13 @@ class DnsViewModel @Inject constructor(
             val state = dnsState.value
             if (state.results.isEmpty()) return@launch
 
-            val summaryText = "DNS ${state.recordType.name} cho ${state.domain}: ${state.results.size} bản ghi (${state.queryTimeMs} ms)"
+            val summaryText = "DNS ${state.recordType.name} for ${state.domain}: ${state.results.size} records (${state.queryTimeMs} ms)"
             val details = buildString {
-                appendLine("Tên miền: ${state.domain}")
-                appendLine("Loại bản ghi: ${state.recordType.name}")
-                appendLine("Máy chủ DNS: ${state.resolver.name} (${state.resolver.primaryIp})")
-                appendLine("Thời gian phản hồi: ${state.queryTimeMs} ms")
-                appendLine("\nCác bản ghi trả về:")
+                appendLine("Domain: ${state.domain}")
+                appendLine("Record Type: ${state.recordType.name}")
+                appendLine("DNS Resolver: ${state.resolver.name} (${state.resolver.primaryIp})")
+                appendLine("Response Time: ${state.queryTimeMs} ms")
+                appendLine("\nReturned records:")
                 state.results.forEach { r ->
                     appendLine("• ${r.value} (TTL: ${r.ttlSeconds}s)")
                 }

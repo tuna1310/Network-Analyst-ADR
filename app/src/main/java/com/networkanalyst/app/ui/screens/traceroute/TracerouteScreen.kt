@@ -48,8 +48,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,8 @@ import androidx.compose.ui.unit.sp
 import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.TracerouteHop
 import com.networkanalyst.app.ui.components.AdBannerComposable
+import com.networkanalyst.app.ui.components.NetworkScanWarningDialog
+import com.networkanalyst.app.ui.components.ScanPolicyHelper
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -78,20 +82,21 @@ fun TracerouteScreen(
     val activity = context as? Activity
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showWarningDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Traceroute (Định tuyến)", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.traceroute_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     if (state.hops.isNotEmpty()) {
                         IconButton(onClick = {
                             viewModel.saveResultsToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả Traceroute vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.traceroute_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -122,14 +127,14 @@ fun TracerouteScreen(
                     OutlinedTextField(
                         value = target,
                         onValueChange = { viewModel.setTarget(it) },
-                        label = { Text("Máy chủ hoặc IP đích") },
-                        placeholder = { Text("1.1.1.1 hoặc google.com") },
+                        label = { Text(stringResource(R.string.traceroute_target_label)) },
+                        placeholder = { Text(stringResource(R.string.traceroute_target_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (target.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setTarget("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                                 }
                             }
                         }
@@ -179,14 +184,22 @@ fun TracerouteScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Tăng dần TTL từ 1 đến 30",
+                            text = "TTL 1 - 30",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Button(
                             onClick = {
-                                if (state.isRunning) viewModel.stopTraceroute() else viewModel.startTraceroute(activity)
+                                if (state.isRunning) {
+                                    viewModel.stopTraceroute()
+                                } else {
+                                    if (ScanPolicyHelper.shouldShowScanWarning(context)) {
+                                        showWarningDialog = true
+                                    } else {
+                                        viewModel.startTraceroute(activity, context)
+                                    }
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (state.isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
@@ -198,7 +211,7 @@ fun TracerouteScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (state.isRunning) "Dừng" else "Trace")
+                            Text(stringResource(if (state.isRunning) R.string.traceroute_btn_stop else R.string.traceroute_btn_trace))
                         }
                     }
 
@@ -212,7 +225,7 @@ fun TracerouteScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Đang kiểm tra Hop ${state.currentHop} / ${state.maxHops}...",
+                            text = stringResource(R.string.traceroute_status_running, "${state.currentHop} / ${state.maxHops}"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -220,10 +233,11 @@ fun TracerouteScreen(
                 }
             }
 
-            if (state.errorMessage != null) {
+            val error = state.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = state.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -237,7 +251,7 @@ fun TracerouteScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Các trạm trung gian (${state.hops.size} Hops)",
+                    text = stringResource(R.string.traceroute_status_done, state.hops.size),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -270,6 +284,16 @@ fun TracerouteScreen(
                 }
             }
         }
+    }
+
+    if (showWarningDialog) {
+        NetworkScanWarningDialog(
+            onDismiss = { showWarningDialog = false },
+            onConfirmed = {
+                showWarningDialog = false
+                viewModel.startTraceroute(activity, context)
+            }
+        )
     }
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
@@ -62,9 +63,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.ui.components.AdBannerComposable
 import com.networkanalyst.app.ui.components.PermissionRationaleDialog
 import com.networkanalyst.app.ui.components.PermissionType
@@ -82,10 +85,17 @@ fun NetworkInfoScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showPermissionRationale by remember { mutableStateOf(false) }
+    var showPhoneStateRationale by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        viewModel.refresh(activity)
+    }
+
+    val phonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
         viewModel.refresh(activity)
     }
 
@@ -102,13 +112,13 @@ fun NetworkInfoScreen(
                     IconButton(onClick = {
                         viewModel.saveSnapshotToHistory()
                         scope.launch {
-                            snackbarHostState.showSnackbar("Đã lưu thông số mạng vào Lịch sử!")
+                            snackbarHostState.showSnackbar(context.getString(R.string.netinfo_saved_history))
                         }
                     }) {
-                        Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                        Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                     }
                     IconButton(onClick = { viewModel.refresh(activity) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Làm mới")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -149,6 +159,14 @@ fun NetworkInfoScreen(
                 }
             }
 
+            // Cellular & SIM Details
+            item {
+                CellularAndSimCard(
+                    info = info,
+                    onGrantPhonePermission = { showPhoneStateRationale = true }
+                )
+            }
+
             // IP & Routing Details
             item {
                 IpRoutingCard(info = info)
@@ -179,6 +197,16 @@ fun NetworkInfoScreen(
             }
         )
     }
+
+    if (showPhoneStateRationale) {
+        PermissionRationaleDialog(
+            permissionType = PermissionType.READ_PHONE_STATE,
+            onDismiss = { showPhoneStateRationale = false },
+            onRequestPermission = {
+                phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+            }
+        )
+    }
 }
 
 @Composable
@@ -203,12 +231,12 @@ fun PermissionNoticeCard(onGrantClicked: () -> Unit) {
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Quyền vị trí cần thiết",
+                    text = stringResource(R.string.netinfo_perm_location_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
                 Text(
-                    text = "Để hiển thị tên Wi-Fi (SSID) và BSSID, Android yêu cầu cấp quyền vị trí.",
+                    text = stringResource(R.string.netinfo_perm_location_desc),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -218,7 +246,7 @@ fun PermissionNoticeCard(onGrantClicked: () -> Unit) {
                 onClick = onGrantClicked,
                 contentPadding = ButtonDefaults.TextButtonContentPadding
             ) {
-                Text("Cấp", fontSize = 12.sp)
+                Text(stringResource(R.string.grant), fontSize = 12.sp)
             }
         }
     }
@@ -248,7 +276,7 @@ fun StatusOverviewCard(info: com.networkanalyst.app.data.model.NetworkInfoData) 
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (info.isConnected) "Đã kết nối" else "Mất kết nối",
+                        text = if (info.isConnected) stringResource(R.string.netinfo_connected) else stringResource(R.string.netinfo_disconnected),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -256,6 +284,9 @@ fun StatusOverviewCard(info: com.networkanalyst.app.data.model.NetworkInfoData) 
 
                 // Status Badges
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (info.isEthernet) {
+                        BadgeChip(text = "Ethernet", icon = Icons.Default.Router, color = Color(0xFF00796B))
+                    }
                     if (info.isVpn) {
                         BadgeChip(text = "VPN", icon = Icons.Default.VpnKey, color = Color(0xFF7B1FA2))
                     }
@@ -282,7 +313,7 @@ fun StatusOverviewCard(info: com.networkanalyst.app.data.model.NetworkInfoData) 
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Cường độ tín hiệu: ${info.signalPercent}% (${info.rssi ?: 0} dBm)",
+                        text = stringResource(R.string.netinfo_signal_strength, info.signalPercent ?: 0, info.rssi ?: 0),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -319,31 +350,94 @@ fun BadgeChip(text: String, icon: ImageVector, color: Color) {
 
 @Composable
 fun WifiDetailsCard(info: com.networkanalyst.app.data.model.NetworkInfoData) {
-    SectionCard(title = "Chi tiết mạng Wi-Fi", icon = Icons.Default.Wifi) {
-        InfoRow(label = "Tên mạng (SSID)", value = info.ssid ?: "Không rõ")
-        InfoRow(label = "Địa chỉ BSSID", value = info.bssid ?: "Không rõ")
-        InfoRow(label = "Chuẩn Wi-Fi", value = info.wifiStandard ?: "Wi-Fi")
-        InfoRow(label = "Tần số / Kênh", value = "${info.frequencyMhz ?: 0} MHz (Kênh ${info.wifiChannel ?: "?"})")
-        InfoRow(label = "Tốc độ liên kết", value = "${info.linkSpeedMbps ?: "?"} Mbps")
+    SectionCard(title = stringResource(R.string.netinfo_wifi_details), icon = Icons.Default.Wifi) {
+        InfoRow(label = stringResource(R.string.netinfo_ssid), value = info.ssid ?: stringResource(R.string.unknown))
+        InfoRow(label = stringResource(R.string.netinfo_bssid), value = info.bssid ?: stringResource(R.string.unknown))
+        InfoRow(label = stringResource(R.string.netinfo_wifi_standard), value = info.wifiStandard ?: "Wi-Fi")
+        InfoRow(label = stringResource(R.string.netinfo_wifi_security), value = info.wifiSecurity ?: stringResource(R.string.unknown))
+        InfoRow(label = stringResource(R.string.netinfo_frequency_channel), value = stringResource(R.string.netinfo_channel_format, info.frequencyMhz ?: 0, info.wifiChannel ?: 0))
+        InfoRow(label = stringResource(R.string.netinfo_link_speed), value = stringResource(R.string.netinfo_speed_format, "${info.linkSpeedMbps ?: "?"}"))
+    }
+}
+
+@Composable
+fun CellularAndSimCard(
+    info: com.networkanalyst.app.data.model.NetworkInfoData,
+    onGrantPhonePermission: () -> Unit
+) {
+    SectionCard(title = stringResource(R.string.netinfo_cellular_details), icon = Icons.Default.PhoneAndroid) {
+        InfoRow(label = stringResource(R.string.netinfo_cellular_tech), value = info.cellularNetworkType ?: stringResource(R.string.netinfo_no_cellular))
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        if (!info.simPermissionGranted) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.netinfo_sim_details_title),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = stringResource(R.string.netinfo_sim_perm_rationale),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = onGrantPhonePermission,
+                        contentPadding = ButtonDefaults.TextButtonContentPadding
+                    ) {
+                        Text(stringResource(R.string.grant_permission), fontSize = 11.sp)
+                    }
+                }
+            }
+        } else {
+            if (info.simInfoList.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.netinfo_no_active_sim),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                info.simInfoList.forEach { sim ->
+                    val roamingTag = if (sim.isDataRoaming) " [Roaming]" else ""
+                    InfoRow(
+                        label = stringResource(R.string.netinfo_sim_slot_format, sim.slotIndex + 1, sim.displayName),
+                        value = "${sim.carrierName} (${sim.countryIso})$roamingTag"
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun IpRoutingCard(info: com.networkanalyst.app.data.model.NetworkInfoData) {
-    SectionCard(title = "Địa chỉ IP & Định tuyến", icon = Icons.Default.Router) {
-        InfoRow(label = "IPv4 nội bộ", value = "${info.localIpv4 ?: "N/A"} / ${info.prefixLength ?: 24}")
-        InfoRow(label = "Subnet Mask", value = info.subnetMask ?: "N/A")
-        InfoRow(label = "Broadcast", value = info.broadcastAddress ?: "N/A")
-        InfoRow(label = "Default Gateway", value = info.gateway ?: "N/A")
-        InfoRow(label = "Giao diện mạng", value = info.interfaceName ?: "N/A")
+    SectionCard(title = stringResource(R.string.netinfo_routing_details), icon = Icons.Default.Router) {
+        InfoRow(label = stringResource(R.string.netinfo_local_ipv4), value = "${info.localIpv4 ?: "N/A"} / ${info.prefixLength ?: 24}")
+        InfoRow(label = stringResource(R.string.netinfo_subnet_mask), value = info.subnetMask ?: "N/A")
+        InfoRow(label = stringResource(R.string.netinfo_broadcast), value = info.broadcastAddress ?: "N/A")
+        InfoRow(label = stringResource(R.string.netinfo_gateway), value = info.gateway ?: "N/A")
+        InfoRow(label = stringResource(R.string.netinfo_interface), value = info.interfaceName ?: "N/A")
         if (info.localIpv6 != null) {
-            InfoRow(label = "IPv6 nội bộ", value = info.localIpv6)
+            InfoRow(label = stringResource(R.string.netinfo_local_ipv6), value = info.localIpv6)
         }
         if (info.dhcpServer != null) {
-            InfoRow(label = "DHCP Server", value = info.dhcpServer)
+            InfoRow(label = stringResource(R.string.netinfo_dhcp_server), value = info.dhcpServer)
         }
         if (info.dnsServers.isNotEmpty()) {
-            InfoRow(label = "Máy chủ DNS", value = info.dnsServers.joinToString(", "))
+            InfoRow(label = stringResource(R.string.netinfo_dns_servers), value = info.dnsServers.joinToString(", "))
         }
     }
 }
@@ -353,7 +447,7 @@ fun PublicInternetCard(
     info: com.networkanalyst.app.data.model.NetworkInfoData,
     onRefresh: () -> Unit
 ) {
-    SectionCard(title = "Internet & Địa chỉ Public", icon = Icons.Default.Public) {
+    SectionCard(title = stringResource(R.string.netinfo_internet_details), icon = Icons.Default.Public) {
         if (info.isPublicIpLoading) {
             Row(
                 modifier = Modifier
@@ -364,12 +458,13 @@ fun PublicInternetCard(
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Đang tải thông tin IP công cộng...", fontSize = 13.sp)
+                Text(stringResource(R.string.netinfo_loading_public_ip), fontSize = 13.sp)
             }
         } else {
-            InfoRow(label = "IP Công cộng (WAN)", value = info.publicIp ?: "Không xác định")
-            InfoRow(label = "Nhà cung cấp (ISP)", value = info.ispName ?: "Không xác định")
-            InfoRow(label = "Vị trí địa lý", value = info.publicLocation ?: "Không xác định")
+            InfoRow(label = stringResource(R.string.netinfo_public_ipv4), value = info.publicIp ?: stringResource(R.string.netinfo_no_ipv4))
+            InfoRow(label = stringResource(R.string.netinfo_public_ipv6), value = info.publicIpv6 ?: (info.publicIpv6Reason ?: stringResource(R.string.netinfo_no_ipv6)))
+            InfoRow(label = stringResource(R.string.netinfo_isp), value = info.ispName ?: stringResource(R.string.unknown))
+            InfoRow(label = stringResource(R.string.netinfo_location), value = info.publicLocation ?: stringResource(R.string.unknown))
         }
     }
 }

@@ -34,6 +34,9 @@ object WarningPreferences {
 object ScanPolicyHelper {
     fun shouldShowWarning(isAccepted: Boolean): Boolean = !isAccepted
     fun canProceedWithScan(isAccepted: Boolean): Boolean = isAccepted
+
+    fun shouldShowScanWarning(context: Context): Boolean = !WarningPreferences.isWarningAccepted(context)
+    fun hasAgreedToScanPolicy(context: Context): Boolean = WarningPreferences.isWarningAccepted(context)
 }
 
 @Composable

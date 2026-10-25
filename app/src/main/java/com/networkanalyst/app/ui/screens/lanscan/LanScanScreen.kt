@@ -62,9 +62,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.DiscoveryProtocol
 import com.networkanalyst.app.data.model.LanDevice
 import com.networkanalyst.app.ui.components.AdBannerComposable
@@ -94,29 +97,29 @@ fun LanScanScreen(
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             showPermissionDialog = true
         } else {
-            viewModel.startScan(activity)
+            viewModel.startScan(activity, context)
         }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        viewModel.startScan(activity)
+        viewModel.startScan(activity, context)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Quét mạng LAN", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.lanscan_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     if (progress.devices.isNotEmpty()) {
                         IconButton(onClick = {
                             viewModel.saveResultsToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả quét LAN vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.lanscan_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -152,7 +155,7 @@ fun LanScanScreen(
                     ) {
                         Column {
                             Text(
-                                text = if (progress.isScanning) "Đang dò tìm thiết bị..." else "Sẵn sàng quét",
+                                text = if (progress.isScanning) stringResource(R.string.lanscan_scanning_status) else stringResource(R.string.portscan_status_idle),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
@@ -181,7 +184,7 @@ fun LanScanScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (progress.isScanning) "Dừng" else "Bắt đầu")
+                            Text(if (progress.isScanning) stringResource(R.string.lanscan_stop) else stringResource(R.string.lanscan_start))
                         }
                     }
 
@@ -204,7 +207,7 @@ fun LanScanScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Đang quét: ${progress.currentIp ?: ""}",
+                                text = stringResource(R.string.lanscan_scanning_ip, progress.currentIp ?: ""),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -220,11 +223,23 @@ fun LanScanScreen(
             }
 
             // Error display
-            if (progress.errorMessage != null) {
+            val error = progress.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = progress.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp
+                )
+            }
+
+            // Warning display (e.g. partial subnet scan)
+            val warning = progress.warning
+            if (warning != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = warning.asString(),
+                    color = MaterialTheme.colorScheme.secondary,
                     fontSize = 13.sp
                 )
             }
@@ -238,7 +253,7 @@ fun LanScanScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Thiết bị tìm thấy (${progress.devices.size})",
+                    text = stringResource(R.string.lanscan_devices_found, progress.devices.size),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -258,7 +273,7 @@ fun LanScanScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nhấn 'Bắt đầu' để quét tất cả thiết bị trên mạng nội bộ.",
+                        text = stringResource(R.string.lanscan_empty_prompt),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -287,7 +302,7 @@ fun LanScanScreen(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     showPermissionDialog = true
                 } else {
-                    viewModel.startScan(activity)
+                    viewModel.startScan(activity, context)
                 }
             }
         )
@@ -306,7 +321,7 @@ fun LanScanScreen(
                         )
                     )
                 } else {
-                    viewModel.startScan(activity)
+                    viewModel.startScan(activity, context)
                 }
             }
         )
@@ -368,7 +383,7 @@ fun LanDeviceCard(device: LanDevice) {
                     }
                 }
 
-                val displayName = device.hostname ?: device.vendor ?: "Thiết bị không xác định"
+                val displayName = device.hostname ?: device.vendor ?: stringResource(R.string.unknown_device)
                 Text(
                     text = displayName,
                     fontSize = 13.sp,
@@ -377,9 +392,24 @@ fun LanDeviceCard(device: LanDevice) {
 
                 if (device.mac != null) {
                     Text(
-                        text = "MAC: ${device.mac}",
+                        text = stringResource(R.string.lanscan_mac_format, device.mac),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+
+                if (device.ipv6 != null) {
+                    Text(
+                        text = stringResource(R.string.lanscan_ipv6_format, device.ipv6),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (device.ipv6Reason != null) {
+                    Text(
+                        text = stringResource(R.string.lanscan_no_ipv6, device.ipv6Reason),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
 
@@ -391,10 +421,10 @@ fun LanDeviceCard(device: LanDevice) {
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (device.isCurrentDevice) {
-                        DeviceBadge(text = "Máy này", color = Color(0xFF1976D2))
+                        DeviceBadge(text = stringResource(R.string.lanscan_device_this), color = Color(0xFF1976D2))
                     }
                     if (device.isGateway) {
-                        DeviceBadge(text = "Gateway / Router", color = Color(0xFFE65100))
+                        DeviceBadge(text = stringResource(R.string.lanscan_device_gateway), color = Color(0xFFE65100))
                     }
                     device.protocols.forEach { proto ->
                         val (label, col) = when (proto) {
@@ -403,6 +433,7 @@ fun LanDeviceCard(device: LanDevice) {
                             DiscoveryProtocol.NETBIOS -> "NetBIOS" to Color(0xFF6A1B9A)
                             DiscoveryProtocol.LLMNR -> "LLMNR" to Color(0xFF00838F)
                             DiscoveryProtocol.SNMP -> "SNMP" to Color(0xFFD84315)
+                            DiscoveryProtocol.REVERSE_DNS -> "PTR" to Color(0xFF5E35B1)
                             DiscoveryProtocol.GATEWAY -> "Gateway" to Color(0xFFE65100)
                         }
                         DeviceBadge(text = label, color = col)
@@ -410,7 +441,7 @@ fun LanDeviceCard(device: LanDevice) {
 
                     if (device.openPorts.isNotEmpty()) {
                         DeviceBadge(
-                            text = "Cổng: ${device.openPorts.joinToString()}",
+                            text = stringResource(R.string.lanscan_ports_format, device.openPorts.joinToString()),
                             color = Color(0xFF2E7D32)
                         )
                     }

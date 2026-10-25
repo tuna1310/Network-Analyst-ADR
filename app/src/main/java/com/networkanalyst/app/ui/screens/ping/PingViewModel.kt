@@ -59,17 +59,17 @@ class PingViewModel @Inject constructor(
             val state = pingState.value
             val summary = state.summary ?: return@launch
 
-            val summaryText = "Ping ${summary.target}: ${summary.received}/${summary.transmitted} nhận (${summary.lossPercentage.toInt()}% mất), TB: ${"%.1f".format(summary.avgRttMs)} ms"
+            val summaryText = "Ping ${summary.target}: ${summary.received}/${summary.transmitted} received (${summary.lossPercentage.toInt()}% loss), Avg: ${"%.1f".format(summary.avgRttMs)} ms"
             val details = buildString {
-                appendLine("Mục tiêu: ${summary.target} (${summary.ip ?: ""})")
-                appendLine("Gửi: ${summary.transmitted}, Nhận: ${summary.received}, Mất: ${summary.lossPercentage}%")
+                appendLine("Target: ${summary.target} (${summary.ip ?: ""})")
+                appendLine("Sent: ${summary.transmitted}, Received: ${summary.received}, Loss: ${summary.lossPercentage}%")
                 appendLine("RTT Min/Avg/Max: ${"%.1f".format(summary.minRttMs)} / ${"%.1f".format(summary.avgRttMs)} / ${"%.1f".format(summary.maxRttMs)} ms")
-                appendLine("\nChi tiết các gói tin:")
+                appendLine("\nPacket details:")
                 state.packets.forEach { p ->
                     if (p.isSuccess) {
-                        appendLine("#${p.sequence}: ${p.bytes} bytes từ ${p.ip} ttl=${p.ttl} rtt=${"%.1f".format(p.rttMs)} ms")
+                        appendLine("#${p.sequence}: ${p.bytes} bytes from ${p.ip} ttl=${p.ttl} rtt=${"%.1f".format(p.rttMs)} ms")
                     } else {
-                        appendLine("#${p.sequence}: Hết thời gian chờ")
+                        appendLine("#${p.sequence}: Request timed out")
                     }
                 }
             }

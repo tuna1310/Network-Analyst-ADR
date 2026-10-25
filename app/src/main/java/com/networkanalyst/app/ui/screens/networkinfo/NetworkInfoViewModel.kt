@@ -33,14 +33,14 @@ class NetworkInfoViewModel @Inject constructor(
             val current = networkInfo.value
             val summary = "${current.connectionType} | IP: ${current.localIpv4 ?: "N/A"} | Gateway: ${current.gateway ?: "N/A"}"
             val details = buildString {
-                appendLine("Kiểu kết nối: ${current.connectionType}")
+                appendLine("Connection Type: ${current.connectionType}")
                 current.ssid?.let { appendLine("SSID: $it") }
                 current.bssid?.let { appendLine("BSSID: $it") }
-                current.localIpv4?.let { appendLine("IPv4 nội bộ: $it / ${current.prefixLength}") }
+                current.localIpv4?.let { appendLine("Local IPv4: $it / ${current.prefixLength}") }
                 current.subnetMask?.let { appendLine("Subnet Mask: $it") }
                 current.gateway?.let { appendLine("Default Gateway: $it") }
                 current.dnsServers.takeIf { it.isNotEmpty() }?.let { appendLine("DNS: ${it.joinToString(", ")}") }
-                current.publicIp?.let { appendLine("IP Công cộng: $it (${current.ispName ?: "ISP"})") }
+                current.publicIp?.let { appendLine("Public IP: $it (${current.ispName ?: "ISP"})") }
             }
 
             historyDao.insert(

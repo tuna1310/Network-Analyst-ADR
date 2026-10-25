@@ -4,15 +4,20 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.DiscoveryProtocol
 import com.networkanalyst.app.data.model.LanDevice
+import com.networkanalyst.app.ui.components.UiText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,12 +26,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,7 +43,8 @@ data class LanScanProgress(
     val totalCount: Int = 0,
     val currentIp: String? = null,
     val devices: List<LanDevice> = emptyList(),
-    val errorMessage: String? = null
+    val error: UiText? = null,
+    val warning: UiText? = null
 )
 
 @Singleton
@@ -74,21 +82,24 @@ class LanScannerService @Inject constructor(
                 if (localIp.isNullOrBlank()) {
                     _scanProgress.value = LanScanProgress(
                         isScanning = false,
-                        errorMessage = "Không tìm thấy địa chỉ IP mạng nội bộ. Hãy kiểm tra kết nối Wi-Fi."
+                        error = UiText.StringResource(R.string.err_lan_no_local_ip)
                     )
                     return@launch
                 }
 
-                // Add current device
+                // Add current device (Lỗi 1.5: String resource)
                 val currentDevice = LanDevice(
                     ip = localIp,
-                    hostname = "Thiết bị này",
-                    vendor = "Android Device",
+                    hostname = context.getString(R.string.lanscan_this_device),
+                    vendor = context.getString(R.string.lanscan_android_device),
                     protocols = setOf(DiscoveryProtocol.TCP_PROBE),
                     isCurrentDevice = true
                 )
                 discoveredMap[localIp] = currentDevice
-                updateProgress(0, 0, localIp)
+
+                val isPartial = isPartialSubnet(prefix)
+                val partialWarning = if (isPartial) UiText.StringResource(R.string.lanscan_partial_subnet_warning) else null
+                updateProgress(0, 0, localIp, partialWarning)
 
                 // 1. Start mDNS discovery in background
                 startMdnsDiscovery()
@@ -96,21 +107,20 @@ class LanScannerService @Inject constructor(
                 // 2. Generate Subnet IP List
                 val ipsToScan = generateSubnetIps(localIp, prefix).filter { it != localIp }
                 val total = ipsToScan.size
-                var completed = 0
+                val completed = AtomicInteger(0) // Lỗi 1.2: AtomicInteger an toàn luồng
 
-                val semaphore = Semaphore(40) // Limit concurrent sockets
+                val socketSemaphore = Semaphore(40) // Giới hạn tổng số socket đồng thời
 
                 val scanTasks = ipsToScan.map { targetIp ->
                     async(Dispatchers.IO) {
                         if (!isActive) return@async
-                        semaphore.withPermit {
-                            probeDevice(
-                                ip = targetIp,
-                                isGateway = targetIp == gatewayIp
-                            )
-                            completed++
-                            updateProgress(completed, total, targetIp)
-                        }
+                        probeDevice(
+                            ip = targetIp,
+                            isGateway = targetIp == gatewayIp,
+                            socketSemaphore = socketSemaphore
+                        )
+                        val currCompleted = completed.incrementAndGet()
+                        updateProgress(currCompleted, total, targetIp, partialWarning)
                     }
                 }
 
@@ -122,14 +132,15 @@ class LanScannerService @Inject constructor(
                     scannedCount = total,
                     totalCount = total,
                     currentIp = null,
-                    devices = discoveredMap.values.sortedBy { ipToLong(it.ip) }
+                    devices = discoveredMap.values.sortedBy { ipToLong(it.ip) },
+                    warning = partialWarning
                 )
             } catch (e: CancellationException) {
                 // Cancelled normally
             } catch (e: Exception) {
                 _scanProgress.value = _scanProgress.value.copy(
                     isScanning = false,
-                    errorMessage = "Lỗi khi quét: ${e.localizedMessage}"
+                    error = UiText.StringResource(R.string.err_generic_service_error, "LAN scan", e.localizedMessage ?: "")
                 )
             } finally {
                 releaseMulticastLock()
@@ -144,17 +155,18 @@ class LanScannerService @Inject constructor(
         _scanProgress.value = _scanProgress.value.copy(isScanning = false)
     }
 
-    private fun updateProgress(scanned: Int, total: Int, currentIp: String?) {
+    private fun updateProgress(scanned: Int, total: Int, currentIp: String?, warning: UiText? = null) {
         _scanProgress.value = _scanProgress.value.copy(
             isScanning = true,
             scannedCount = scanned,
             totalCount = total,
             currentIp = currentIp,
-            devices = discoveredMap.values.sortedBy { ipToLong(it.ip) }
+            devices = discoveredMap.values.sortedBy { ipToLong(it.ip) },
+            warning = warning
         )
     }
 
-    private suspend fun probeDevice(ip: String, isGateway: Boolean) {
+    private suspend fun probeDevice(ip: String, isGateway: Boolean, socketSemaphore: Semaphore) {
         val protocols = mutableSetOf<DiscoveryProtocol>()
         val openPorts = mutableListOf<Int>()
         var responseTime: Long? = null
@@ -166,23 +178,47 @@ class LanScannerService @Inject constructor(
             protocols.add(DiscoveryProtocol.GATEWAY)
         }
 
-        // 1. Parallel Quick TCP Port Probe & Ping
+        // 1. Parallel Quick TCP Port Probe & Ping (Lỗi 1.3: Thăm dò song song, dừng sớm khi có cổng mở, giới hạn semaphore socket)
         val commonPorts = intArrayOf(80, 443, 22, 445, 8080, 53, 8008, 9100)
         val startTime = System.currentTimeMillis()
         var reachable = false
 
-        for (port in commonPorts) {
-            try {
-                Socket().use { socket ->
-                    socket.connect(InetSocketAddress(ip, port), 200)
-                    protocols.add(DiscoveryProtocol.TCP_PROBE)
-                    openPorts.add(port)
-                    reachable = true
-                    if (responseTime == null) {
-                        responseTime = System.currentTimeMillis() - startTime
+        coroutineScope {
+            val openPortDeferred = CompletableDeferred<Int>()
+            val activeCount = AtomicInteger(commonPorts.size)
+
+            val portJobs = commonPorts.map { port ->
+                launch(Dispatchers.IO) {
+                    try {
+                        socketSemaphore.withPermit {
+                            if (openPortDeferred.isCompleted || !isActive) return@withPermit
+                            Socket().use { socket ->
+                                socket.connect(InetSocketAddress(ip, port), 200)
+                                openPortDeferred.complete(port)
+                            }
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        if (activeCount.decrementAndGet() == 0) {
+                            openPortDeferred.complete(-1)
+                        }
                     }
                 }
-            } catch (_: Exception) {}
+            }
+
+            val firstOpen = try {
+                openPortDeferred.await()
+            } catch (_: Exception) {
+                -1
+            }
+
+            if (firstOpen > 0) {
+                portJobs.forEach { it.cancel() }
+                protocols.add(DiscoveryProtocol.TCP_PROBE)
+                openPorts.add(firstOpen)
+                reachable = true
+                responseTime = System.currentTimeMillis() - startTime
+            }
         }
 
         // Ping check fallback
@@ -199,12 +235,10 @@ class LanScannerService @Inject constructor(
 
         // 2. NetBIOS Query (UDP port 137) - Gets Windows/Samba name and MAC address!
         val netbiosResult = queryNetBios(ip)
+        val netbiosHostname = netbiosResult?.hostname
         if (netbiosResult != null) {
             reachable = true
             protocols.add(DiscoveryProtocol.NETBIOS)
-            if (hostname == null && netbiosResult.hostname != null) {
-                hostname = netbiosResult.hostname
-            }
             if (mac == null && netbiosResult.mac != null) {
                 mac = netbiosResult.mac
             }
@@ -215,9 +249,6 @@ class LanScannerService @Inject constructor(
         if (llmnrHostname != null) {
             reachable = true
             protocols.add(DiscoveryProtocol.LLMNR)
-            if (hostname == null) {
-                hostname = llmnrHostname
-            }
         }
 
         // 4. SNMP Query (UDP port 161)
@@ -230,27 +261,44 @@ class LanScannerService @Inject constructor(
             }
         }
 
-        // If online, resolve canonical hostname if still missing
+        // 5. Reverse DNS / PTR Query (Lỗi 1.4: bọc timeout 1500ms)
+        var ptrHostname: String? = null
         if (reachable) {
-            if (hostname == null) {
-                try {
-                    val canonical = InetAddress.getByName(ip).canonicalHostName
-                    if (canonical != ip) {
-                        hostname = canonical
+            try {
+                val canonical = withTimeoutOrNull(1500L) {
+                    withContext(Dispatchers.IO) {
+                        InetAddress.getByName(ip).canonicalHostName
                     }
-                } catch (_: Exception) {}
-            }
+                }
+                if (canonical != null && canonical != ip && canonical.isNotBlank()) {
+                    ptrHostname = canonical
+                    protocols.add(DiscoveryProtocol.REVERSE_DNS)
+                }
+            } catch (_: Exception) {}
+
+            val existing = discoveredMap[ip]
+            val mdnsCandidate = existing?.hostname?.takeIf { existing.protocols.contains(DiscoveryProtocol.MDNS) }
+
+            // Áp dụng thứ tự ưu tiên chuẩn: mDNS > NetBIOS > LLMNR > PTR
+            hostname = HostnameResolutionHelper.selectBestHostname(
+                ip = ip,
+                mdns = mdnsCandidate,
+                netbios = netbiosHostname,
+                llmnr = llmnrHostname,
+                ptr = ptrHostname
+            )
 
             if (vendor == null) {
                 vendor = guessVendor(mac, hostname, openPorts, isGateway)
             }
 
-            val existing = discoveredMap[ip]
             val mergedProtocols = (existing?.protocols ?: emptySet()) + protocols
             val mergedPorts = ((existing?.openPorts ?: emptyList()) + openPorts).distinct()
 
             val device = LanDevice(
                 ip = ip,
+                ipv6 = existing?.ipv6,
+                ipv6Reason = existing?.ipv6Reason ?: "No AAAA record via mDNS",
                 mac = mac ?: existing?.mac,
                 hostname = hostname ?: existing?.hostname ?: if (isGateway) "Default Gateway / Router" else null,
                 vendor = vendor ?: existing?.vendor,
@@ -283,13 +331,35 @@ class LanScannerService @Inject constructor(
                                     val port = resolvedInfo.port
                                     val existing = discoveredMap[host]
 
+                                    // Trích xuất IPv6 từ mDNS phản hồi nếu có
+                                    var v6Address: String? = existing?.ipv6
+                                    if (resolvedInfo.host is java.net.Inet6Address) {
+                                        v6Address = resolvedInfo.host.hostAddress
+                                    }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                        val v6 = resolvedInfo.hostAddresses.firstOrNull { it is java.net.Inet6Address }?.hostAddress
+                                        if (v6 != null) {
+                                            v6Address = v6
+                                        }
+                                    }
+
                                     val protocols = (existing?.protocols ?: emptySet()) + DiscoveryProtocol.MDNS
                                     val ports = if (port > 0) ((existing?.openPorts ?: emptyList()) + port).distinct() else existing?.openPorts ?: emptyList()
 
+                                    val updatedHostname = HostnameResolutionHelper.selectBestHostname(
+                                        ip = host,
+                                        mdns = name,
+                                        netbios = null,
+                                        llmnr = null,
+                                        ptr = existing?.hostname
+                                    ) ?: existing?.hostname ?: name
+
                                     val updated = LanDevice(
                                         ip = host,
+                                        ipv6 = v6Address,
+                                        ipv6Reason = if (v6Address == null) "No AAAA record via mDNS" else null,
                                         mac = existing?.mac,
-                                        hostname = existing?.hostname ?: name,
+                                        hostname = updatedHostname,
                                         vendor = existing?.vendor ?: guessVendorFromMdns(type, name),
                                         responseTimeMs = existing?.responseTimeMs,
                                         protocols = protocols,
@@ -473,8 +543,25 @@ class LanScannerService @Inject constructor(
         }
     }
 
+    private fun ensureOuiLoaded() {
+        try {
+            context.resources.openRawResource(com.networkanalyst.app.R.raw.oui_database).use {
+                OuiLookupHelper.initializeIfNeeded(it)
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun guessVendor(mac: String?, hostname: String?, openPorts: List<Int>, isGateway: Boolean): String {
         if (isGateway) return "Router / Access Point"
+
+        // OUI MAC prefix lookup (hỗ trợ MA-L, MA-M, MA-S và phát hiện MAC ngẫu nhiên / Private MAC)
+        if (mac != null) {
+            ensureOuiLoaded()
+            val ouiVendor = OuiLookupHelper.lookupVendor(mac)
+            if (ouiVendor != null) {
+                return ouiVendor
+            }
+        }
 
         val host = hostname?.lowercase() ?: ""
 
@@ -497,22 +584,11 @@ class LanScannerService @Inject constructor(
             return "Linux / Unix Server"
         }
 
-        // OUI MAC prefix lookup
         if (mac != null) {
-            val prefix = mac.replace(":", "").take(6).uppercase()
-            return when {
-                prefix.startsWith("001A11") || prefix.startsWith("F01898") -> "Google"
-                prefix.startsWith("ACBC32") || prefix.startsWith("3C0754") || prefix.startsWith("F45C89") -> "Apple"
-                prefix.startsWith("D4619D") || prefix.startsWith("484BAA") -> "Samsung"
-                prefix.startsWith("B09575") || prefix.startsWith("000C43") -> "TP-Link"
-                prefix.startsWith("B827EB") || prefix.startsWith("DCA632") -> "Raspberry Pi"
-                prefix.startsWith("246F28") || prefix.startsWith("A4CF12") -> "Espressif (IoT)"
-                prefix.startsWith("001132") -> "Synology"
-                else -> "Thiết bị mạng (${mac.take(8)})"
-            }
+            return "Network Device (${mac.take(8)})"
         }
 
-        return "Thiết bị mạng LAN"
+        return "Network Device"
     }
 
     private fun guessVendorFromMdns(type: String, serviceName: String): String {
@@ -522,32 +598,6 @@ class LanScannerService @Inject constructor(
             type.contains("ipp") || type.contains("printer") -> "Network Printer"
             type.contains("workstation") -> "Computer / Workstation"
             else -> serviceName
-        }
-    }
-
-    private fun generateSubnetIps(ip: String, prefix: Int): List<String> {
-        return try {
-            val parts = ip.split(".").map { it.toInt() }
-            val ipInt = (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
-            val mask = -0x1 shl (32 - prefix)
-            val network = ipInt and mask
-            val broadcast = network or mask.inv()
-
-            val ips = mutableListOf<String>()
-            // Scan /24 max range to avoid huge delays
-            val start = (network + 1).coerceAtLeast(ipInt - 128)
-            val end = (broadcast - 1).coerceAtMost(start + 254)
-
-            for (curr in start..end) {
-                val ipStr = "" + (curr ushr 24 and 0xff) + "." +
-                        (curr ushr 16 and 0xff) + "." +
-                        (curr ushr 8 and 0xff) + "." +
-                        (curr and 0xff)
-                ips.add(ipStr)
-            }
-            ips
-        } catch (_: Exception) {
-            emptyList()
         }
     }
 
@@ -580,5 +630,56 @@ class LanScannerService @Inject constructor(
                 multicastLock?.release()
             }
         } catch (_: Exception) {}
+    }
+
+    companion object {
+        fun isPartialSubnet(prefix: Int): Boolean = prefix in 1..23
+
+        internal fun generateSubnetIps(ip: String, prefix: Int): List<String> {
+            return try {
+                if (prefix >= 31 || prefix <= 0) {
+                    return emptyList()
+                }
+                val parts = ip.split(".").map { it.toInt() }
+                if (parts.size != 4 || parts.any { it !in 0..255 }) {
+                    return emptyList()
+                }
+                val ipLong = (parts[0].toLong() shl 24) or (parts[1].toLong() shl 16) or (parts[2].toLong() shl 8) or parts[3].toLong()
+                val mask = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
+                val network = ipLong and mask
+                val broadcast = network or (mask.inv() and 0xFFFFFFFFL)
+
+                val start: Long
+                val end: Long
+
+                if (prefix >= 24) {
+                    // Full subnet scan for /24 to /30
+                    start = network + 1
+                    end = broadcast - 1
+                } else {
+                    // Large subnet (< /24): limit to at most 254 IPs around current IP
+                    var candidateStart = (ipLong - 127L).coerceAtLeast(network + 1)
+                    var candidateEnd = (candidateStart + 254L).coerceAtMost(broadcast - 1)
+                    if (candidateEnd - candidateStart < 254L) {
+                        candidateStart = (candidateEnd - 254L).coerceAtLeast(network + 1)
+                    }
+                    start = candidateStart
+                    end = candidateEnd
+                }
+
+                if (start > end) return emptyList()
+
+                val ips = ArrayList<String>((end - start + 1).toInt().coerceAtLeast(0))
+                for (curr in start..end) {
+                    if (curr != ipLong) {
+                        val ipStr = "${(curr ushr 24) and 0xff}.${(curr ushr 16) and 0xff}.${(curr ushr 8) and 0xff}.${curr and 0xff}"
+                        ips.add(ipStr)
+                    }
+                }
+                ips
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
     }
 }

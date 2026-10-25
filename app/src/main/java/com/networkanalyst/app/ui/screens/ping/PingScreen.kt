@@ -52,10 +52,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.PingPacket
 import com.networkanalyst.app.data.model.PingSummary
 import com.networkanalyst.app.ui.components.AdBannerComposable
@@ -80,16 +82,16 @@ fun PingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kiểm tra Ping (ICMP)", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.ping_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     if (state.summary != null) {
                         IconButton(onClick = {
                             viewModel.saveResultsToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả Ping vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.ping_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -121,14 +123,14 @@ fun PingScreen(
                     OutlinedTextField(
                         value = target,
                         onValueChange = { viewModel.setTarget(it) },
-                        label = { Text("Máy chủ hoặc IP đích") },
-                        placeholder = { Text("google.com hoặc 8.8.8.8") },
+                        label = { Text(stringResource(R.string.ping_target_label)) },
+                        placeholder = { Text(stringResource(R.string.ping_target_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (target.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setTarget("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                                 }
                             }
                         }
@@ -158,7 +160,7 @@ fun PingScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Số gói:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.ping_packets_label), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             Spacer(modifier = Modifier.width(6.dp))
                             listOf(4, 10, 20).forEach { num ->
                                 FilterChip(
@@ -184,16 +186,17 @@ fun PingScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (state.isRunning) "Dừng" else "Ping")
+                            Text(stringResource(if (state.isRunning) R.string.ping_btn_stop else R.string.ping_btn_start))
                         }
                     }
                 }
             }
 
-            if (state.errorMessage != null) {
+            val error = state.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = state.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -208,11 +211,23 @@ fun PingScreen(
             }
 
             // Live packets stream
-            Text(
-                text = "Các phản hồi (${state.packets.size}/$count)",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.ping_details_title),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "${state.packets.size}/$count",
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Spacer(modifier = Modifier.height(6.dp))
 
             LazyColumn(
@@ -250,7 +265,7 @@ fun PingSummaryCard(summary: PingSummary) {
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(
-                text = "Thống kê kết quả:",
+                text = stringResource(R.string.ping_statistics),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.primary
@@ -261,13 +276,13 @@ fun PingSummaryCard(summary: PingSummary) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Gửi: ${summary.transmitted}  |  Nhận: ${summary.received}  |  Mất: ${summary.lossPercentage.toInt()}%",
+                    text = stringResource(R.string.ping_loss_format, summary.transmitted, summary.received, "${summary.lossPercentage.toInt()}"),
                     fontSize = 13.sp
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Độ trễ: Min ${"%.1f".format(summary.minRttMs)}ms / TB ${"%.1f".format(summary.avgRttMs)}ms / Max ${"%.1f".format(summary.maxRttMs)}ms",
+                text = stringResource(R.string.ping_rtt_format, "%.1f".format(summary.minRttMs), "%.1f".format(summary.avgRttMs), "%.1f".format(summary.maxRttMs)),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -308,20 +323,20 @@ fun PingPacketRow(packet: PingPacket) {
             Column(modifier = Modifier.weight(1f)) {
                 if (packet.isSuccess) {
                     Text(
-                        text = "#${packet.sequence}: ${packet.bytes} bytes từ ${packet.ip}",
+                        text = "#${packet.sequence}: ${packet.bytes} bytes | ${packet.ip}",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "ttl=${packet.ttl}  thời gian=${"%.1f".format(packet.rttMs)} ms",
+                        text = "ttl=${packet.ttl}  time=${"%.1f".format(packet.rttMs)} ms",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Text(
-                        text = "#${packet.sequence}: Hết thời gian chờ",
+                        text = stringResource(R.string.ping_packet_timeout, packet.sequence),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.error

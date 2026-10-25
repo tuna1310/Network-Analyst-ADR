@@ -1,22 +1,31 @@
 package com.networkanalyst.app.data.model
 
 enum class ToolType(val displayName: String) {
-    NETWORK_INFO("Thông tin mạng"),
-    LAN_SCAN("Quét mạng LAN"),
+    NETWORK_INFO("Network Info"),
+    LAN_SCAN("LAN Scan"),
     PING("Ping"),
     TRACEROUTE("Traceroute"),
-    PORT_SCAN("Quét cổng"),
-    DNS("Tra cứu DNS"),
+    PORT_SCAN("Port Scan"),
+    DNS("DNS"),
     WHOIS("Whois / RDAP")
 }
 
+data class SimInfo(
+    val slotIndex: Int,
+    val carrierName: String,
+    val displayName: String,
+    val countryIso: String,
+    val isDataRoaming: Boolean
+)
+
 data class NetworkInfoData(
     val isConnected: Boolean = false,
-    val connectionType: String = "Không có kết nối",
+    val connectionType: String = "Disconnected",
     val isWifi: Boolean = false,
     val isCellular: Boolean = false,
     val isVpn: Boolean = false,
     val isHotspotActive: Boolean = false,
+    val isEthernet: Boolean = false,
     
     // Wi-Fi Details
     val ssid: String? = null,
@@ -26,8 +35,14 @@ data class NetworkInfoData(
     val linkSpeedMbps: Int? = null,
     val frequencyMhz: Int? = null,
     val wifiStandard: String? = null,
+    val wifiSecurity: String? = null,
     val wifiChannel: Int? = null,
     val requiresLocationPermission: Boolean = false,
+
+    // Cellular & SIM Details
+    val cellularNetworkType: String? = null,
+    val simInfoList: List<SimInfo> = emptyList(),
+    val simPermissionGranted: Boolean = false,
 
     // IP & Routing
     val localIpv4: String? = null,
@@ -42,6 +57,8 @@ data class NetworkInfoData(
 
     // Public Internet
     val publicIp: String? = null,
+    val publicIpv6: String? = null,
+    val publicIpv6Reason: String? = null,
     val ispName: String? = null,
     val publicLocation: String? = null,
     val isPublicIpLoading: Boolean = false
@@ -53,11 +70,14 @@ enum class DiscoveryProtocol {
     NETBIOS,
     LLMNR,
     SNMP,
+    REVERSE_DNS,
     GATEWAY
 }
 
 data class LanDevice(
     val ip: String,
+    val ipv6: String? = null,
+    val ipv6Reason: String? = null,
     val mac: String? = null,
     val hostname: String? = null,
     val vendor: String? = null,
@@ -128,7 +148,8 @@ enum class DnsRecordType {
     SRV,
     CAA,
     HTTPS,
-    SVCB
+    SVCB,
+    ALL
 }
 
 data class DnsResolver(

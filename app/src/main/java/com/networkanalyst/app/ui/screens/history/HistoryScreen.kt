@@ -71,10 +71,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.local.entity.HistoryEntity
 import com.networkanalyst.app.data.model.ToolType
 import com.networkanalyst.app.ui.components.AdBannerComposable
@@ -100,11 +102,11 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lịch sử kiểm tra", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.history_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     if (historyList.isNotEmpty()) {
                         IconButton(onClick = { showConfirmClearDialog = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Xóa tất cả")
+                            Icon(Icons.Default.DeleteSweep, contentDescription = stringResource(R.string.delete_all))
                         }
                     }
                 },
@@ -128,13 +130,13 @@ fun HistoryScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                label = { Text("Tìm kiếm mục tiêu hoặc kết quả") },
-                placeholder = { Text("IP, tên miền, v.v.") },
+                label = { Text(stringResource(R.string.history_search_label)) },
+                placeholder = { Text(stringResource(R.string.history_search_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 },
@@ -152,7 +154,7 @@ fun HistoryScreen(
                 FilterChip(
                     selected = selectedFilter == null,
                     onClick = { viewModel.setFilter(null) },
-                    label = { Text("Tất cả", fontSize = 11.sp) }
+                    label = { Text(stringResource(R.string.all), fontSize = 11.sp) }
                 )
                 ToolType.values().forEach { t ->
                     FilterChip(
@@ -173,7 +175,7 @@ fun HistoryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Chưa có bản ghi lịch sử nào.",
+                        text = stringResource(R.string.history_empty),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -189,10 +191,10 @@ fun HistoryScreen(
                             onDelete = { viewModel.deleteItem(item.id) },
                             onCopy = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Network Analyst History", "${item.summary}\n\n${item.details}")
+                                val clip = ClipData.newPlainText(context.getString(R.string.history_title_app_bar), "${item.summary}\n\n${item.details}")
                                 clipboard.setPrimaryClip(clip)
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("Đã sao chép vào bộ nhớ tạm!")
+                                    snackbarHostState.showSnackbar(context.getString(R.string.copied_to_clipboard))
                                 }
                             }
                         )
@@ -209,8 +211,8 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { showConfirmClearDialog = false },
             icon = { Icon(Icons.Default.Delete, contentDescription = null) },
-            title = { Text("Xác nhận xóa") },
-            text = { Text("Bạn có chắc chắn muốn xóa toàn bộ các bản ghi trong danh sách này?") },
+            title = { Text(stringResource(R.string.history_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.history_delete_confirm_message)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -219,12 +221,12 @@ fun HistoryScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Xóa hết")
+                    Text(stringResource(R.string.delete_all))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showConfirmClearDialog = false }) {
-                    Text("Hủy")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -312,7 +314,7 @@ fun HistoryCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = if (expanded) "Thu gọn chi tiết" else "Xem chi tiết",
+                        text = if (expanded) stringResource(R.string.collapse_details) else stringResource(R.string.expand_details),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary

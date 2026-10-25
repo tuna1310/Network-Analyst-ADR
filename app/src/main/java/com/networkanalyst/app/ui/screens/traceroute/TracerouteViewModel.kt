@@ -1,6 +1,7 @@
 package com.networkanalyst.app.ui.screens.traceroute
 
 import android.app.Activity
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.networkanalyst.app.data.local.HistoryDao
@@ -9,6 +10,7 @@ import com.networkanalyst.app.data.model.ToolType
 import com.networkanalyst.app.data.service.AdService
 import com.networkanalyst.app.data.service.TracerouteService
 import com.networkanalyst.app.data.service.TracerouteSessionState
+import com.networkanalyst.app.ui.components.ScanPolicyHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +41,11 @@ class TracerouteViewModel @Inject constructor(
         _enableGeoIp.value = enabled
     }
 
-    fun startTraceroute(activity: Activity? = null) {
+    fun startTraceroute(activity: Activity? = null, context: Context? = null) {
+        // Chặn traceroute nếu người dùng từ chối hoặc chưa đồng ý chính sách ủy quyền mạng
+        if (context != null && !ScanPolicyHelper.hasAgreedToScanPolicy(context)) {
+            return
+        }
         adService.recordToolAction(activity)
         tracerouteService.startTraceroute(
             host = _targetHost.value,
@@ -58,13 +64,13 @@ class TracerouteViewModel @Inject constructor(
 
             val lastHop = state.hops.lastOrNull()
             val reached = lastHop?.isDestination == true
-            val summaryText = "Traceroute ${state.target}: ${state.hops.size} bước (Hops) - ${if (reached) "Đã tới đích" else "Dừng"}"
+            val summaryText = "Traceroute ${state.target}: ${state.hops.size} hops - ${if (reached) "Reached Destination" else "Stopped"}"
             val details = buildString {
-                appendLine("Mục tiêu: ${state.target} (${state.resolvedIp ?: ""})")
-                appendLine("Tổng số hop: ${state.hops.size}")
+                appendLine("Target: ${state.target} (${state.resolvedIp ?: ""})")
+                appendLine("Total hops: ${state.hops.size}")
                 state.hops.forEach { hop ->
                     val rtt = if (hop.rttMs != null) "${"%.1f".format(hop.rttMs)} ms" else "* * *"
-                    appendLine("${hop.hop}. ${hop.ip} (${hop.hostname ?: ""}) - $rtt ${if (hop.isDestination) "[ĐÍCH]" else ""}")
+                    appendLine("${hop.hop}. ${hop.ip} (${hop.hostname ?: ""}) - $rtt ${if (hop.isDestination) "[DESTINATION]" else ""}")
                 }
             }
 

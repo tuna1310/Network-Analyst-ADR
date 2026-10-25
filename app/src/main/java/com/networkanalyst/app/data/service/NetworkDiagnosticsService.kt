@@ -11,8 +11,11 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import com.networkanalyst.app.data.model.NetworkInfoData
+import com.networkanalyst.app.data.model.SimInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +44,10 @@ class NetworkDiagnosticsService @Inject constructor(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val wifiManager =
         context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private val telephonyManager =
+        context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+    private val subscriptionManager =
+        context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
 
     private val _networkInfo = MutableStateFlow(NetworkInfoData())
     val networkInfo: StateFlow<NetworkInfoData> = _networkInfo.asStateFlow()
@@ -109,7 +116,7 @@ class NetworkDiagnosticsService @Inject constructor(
         if (activeNetwork == null) {
             return NetworkInfoData(
                 isConnected = false,
-                connectionType = "Không có kết nối mạng"
+                connectionType = "Disconnected"
             )
         }
 
@@ -121,15 +128,12 @@ class NetworkDiagnosticsService @Inject constructor(
         val isVpn = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
         val isEthernet = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
 
-        val connectionType = when {
-            isVpn && isWifi -> "VPN (trên Wi-Fi)"
-            isVpn && isCellular -> "VPN (trên Di động)"
-            isVpn -> "Mạng riêng ảo (VPN)"
-            isWifi -> "Mạng Wi-Fi"
-            isCellular -> "Dữ liệu di động"
-            isEthernet -> "Mạng có dây (Ethernet)"
-            else -> "Kết nối khác"
-        }
+        val connectionType = NetworkClassifierHelper.classifyTransport(
+            isWifi = isWifi,
+            isCellular = isCellular,
+            isEthernet = isEthernet,
+            isVpn = isVpn
+        )
 
         // Subnet, IP, Gateway, DNS
         var localIpv4: String? = null
@@ -214,13 +218,13 @@ class NetworkDiagnosticsService @Inject constructor(
                     ssid = if (rawSsid != null && rawSsid != "<unknown ssid>" && rawSsid != "") {
                         rawSsid.trim('"')
                     } else {
-                        "Đã kết nối Wi-Fi"
+                        "Connected to Wi-Fi"
                     }
                     bssid = if (info.bssid != null && info.bssid != "02:00:00:00:00:00") {
                         info.bssid
                     } else null
                 } else {
-                    ssid = "Cần quyền vị trí để xem tên Wi-Fi"
+                    ssid = "Location permission required to read SSID"
                     bssid = null
                 }
 
@@ -233,6 +237,49 @@ class NetworkDiagnosticsService @Inject constructor(
             }
         }
 
+        var wifiSecurity: String? = null
+        if (isWifi) {
+            val secType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                wifiManager.connectionInfo?.currentSecurityType
+            } else null
+            wifiSecurity = NetworkClassifierHelper.classifyWifiSecurity(null, secType)
+        }
+
+        val hasPhoneStatePermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val simList = mutableListOf<SimInfo>()
+        var cellularNetworkType: String? = null
+
+        if (hasPhoneStatePermission) {
+            try {
+                val subs = subscriptionManager?.activeSubscriptionInfoList ?: emptyList()
+                subs.forEach { sub ->
+                    simList.add(
+                        SimInfo(
+                            slotIndex = sub.simSlotIndex,
+                            carrierName = sub.carrierName?.toString() ?: "Unknown",
+                            displayName = sub.displayName?.toString() ?: "SIM ${sub.simSlotIndex + 1}",
+                            countryIso = sub.countryIso?.uppercase() ?: "",
+                            isDataRoaming = sub.dataRoaming == SubscriptionManager.DATA_ROAMING_ENABLE
+                        )
+                    )
+                }
+            } catch (_: Exception) {}
+
+            if (isCellular && telephonyManager != null) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        cellularNetworkType = NetworkClassifierHelper.classifyCellularType(telephonyManager.dataNetworkType)
+                    }
+                } catch (_: Exception) {}
+            }
+        } else if (isCellular) {
+            cellularNetworkType = "Mobile Data"
+        }
+
         return NetworkInfoData(
             isConnected = true,
             connectionType = connectionType,
@@ -240,6 +287,7 @@ class NetworkDiagnosticsService @Inject constructor(
             isCellular = isCellular,
             isVpn = isVpn,
             isHotspotActive = isHotspot,
+            isEthernet = isEthernet,
             ssid = ssid,
             bssid = bssid,
             rssi = rssi,
@@ -247,8 +295,12 @@ class NetworkDiagnosticsService @Inject constructor(
             linkSpeedMbps = linkSpeedMbps,
             frequencyMhz = frequencyMhz,
             wifiStandard = wifiStandard,
+            wifiSecurity = wifiSecurity,
             wifiChannel = wifiChannel,
             requiresLocationPermission = requiresLocation,
+            cellularNetworkType = cellularNetworkType,
+            simInfoList = simList,
+            simPermissionGranted = hasPhoneStatePermission,
             localIpv4 = localIpv4,
             localIpv6 = localIpv6,
             subnetMask = subnetMask,
@@ -262,6 +314,14 @@ class NetworkDiagnosticsService @Inject constructor(
         )
     }
 
+    private data class PublicIpResult(
+        val ipv4: String?,
+        val ipv6: String?,
+        val ipv6Reason: String?,
+        val isp: String?,
+        val location: String?
+    )
+
     private suspend fun fetchPublicIpDetails(current: NetworkInfoData) {
         if (!current.isConnected) {
             _networkInfo.value = current.copy(isPublicIpLoading = false)
@@ -270,44 +330,63 @@ class NetworkDiagnosticsService @Inject constructor(
 
         try {
             val result = withContext(Dispatchers.IO) {
-                var ip: String? = null
+                var ipv4: String? = null
+                var ipv6: String? = null
+                var ipv6Reason: String? = null
                 var isp: String? = null
                 var location: String? = null
 
-                // First attempt: ipify / ip-api
+                // 1. Lấy Public IPv4 (buộc IPv4 qua api4.ipify.org)
                 try {
-                    val url = URL("https://api.ipify.org?format=json")
+                    val url = URL("https://api4.ipify.org?format=json")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.connectTimeout = 3000
                     conn.readTimeout = 3000
-                    conn.requestMethod = "GET"
                     if (conn.responseCode == 200) {
                         val reader = BufferedReader(InputStreamReader(conn.inputStream))
                         val json = JSONObject(reader.readText())
-                        ip = json.optString("ip")
+                        ipv4 = json.optString("ip").ifEmpty { null }
                         reader.close()
                     }
                     conn.disconnect()
-                } catch (e: Exception) {
-                    // Fallback to icanhazip
+                } catch (_: Exception) {
                     try {
-                        val url = URL("https://icanhazip.com")
+                        val url = URL("https://ipv4.icanhazip.com")
                         val conn = url.openConnection() as HttpURLConnection
                         conn.connectTimeout = 3000
                         conn.readTimeout = 3000
                         if (conn.responseCode == 200) {
                             val reader = BufferedReader(InputStreamReader(conn.inputStream))
-                            ip = reader.readLine()?.trim()
+                            ipv4 = reader.readLine()?.trim()
                             reader.close()
                         }
                         conn.disconnect()
                     } catch (_: Exception) {}
                 }
 
-                // If public IP found, attempt geo/ISP lookup
-                if (!ip.isNullOrBlank()) {
+                // 2. Lấy Public IPv6 (qua api6.ipify.org)
+                try {
+                    val url = URL("https://api6.ipify.org?format=json")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 3000
+                    conn.readTimeout = 3000
+                    if (conn.responseCode == 200) {
+                        val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                        val json = JSONObject(reader.readText())
+                        ipv6 = json.optString("ip").ifEmpty { null }
+                        reader.close()
+                    }
+                    conn.disconnect()
+                } catch (_: Exception) {
+                    ipv6 = null
+                    ipv6Reason = "No global IPv6 route to the Internet"
+                }
+
+                // 3. Tra cứu ISP và Địa lý cho Public IP
+                val targetForGeo = ipv4 ?: ipv6
+                if (!targetForGeo.isNullOrBlank()) {
                     try {
-                        val url = URL("https://ipwho.is/$ip")
+                        val url = URL("https://ipwho.is/$targetForGeo")
                         val conn = url.openConnection() as HttpURLConnection
                         conn.connectTimeout = 3000
                         conn.readTimeout = 3000
@@ -327,16 +406,18 @@ class NetworkDiagnosticsService @Inject constructor(
                     } catch (_: Exception) {}
                 }
 
-                Triple(ip, isp, location)
+                PublicIpResult(ipv4, ipv6, ipv6Reason, isp, location)
             }
 
             _networkInfo.value = _networkInfo.value.copy(
-                publicIp = result.first,
-                ispName = result.second,
-                publicLocation = result.third,
+                publicIp = result.ipv4,
+                publicIpv6 = result.ipv6,
+                publicIpv6Reason = result.ipv6Reason,
+                ispName = result.isp,
+                publicLocation = result.location,
                 isPublicIpLoading = false
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             _networkInfo.value = _networkInfo.value.copy(isPublicIpLoading = false)
         }
     }

@@ -1,6 +1,8 @@
 package com.networkanalyst.app.data.service
 
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.TracerouteHop
+import com.networkanalyst.app.ui.components.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +28,7 @@ data class TracerouteSessionState(
     val currentHop: Int = 0,
     val maxHops: Int = 30,
     val hops: List<TracerouteHop> = emptyList(),
-    val errorMessage: String? = null
+    val error: UiText? = null
 )
 
 @Singleton
@@ -51,7 +53,7 @@ class TracerouteService @Inject constructor(
             val cleanHost = host.trim()
             if (cleanHost.isEmpty()) {
                 _tracerouteState.value = TracerouteSessionState(
-                    errorMessage = "Vui lòng nhập địa chỉ IP hoặc tên miền hợp lệ."
+                    error = UiText.StringResource(R.string.err_invalid_target)
                 )
                 return@launch
             }
@@ -75,7 +77,7 @@ class TracerouteService @Inject constructor(
                     _tracerouteState.value = TracerouteSessionState(
                         isRunning = false,
                         target = cleanHost,
-                        errorMessage = "Không thể phân giải tên miền: $cleanHost"
+                        error = UiText.StringResource(R.string.err_host_unresolved, cleanHost)
                     )
                     return@launch
                 }
@@ -86,9 +88,17 @@ class TracerouteService @Inject constructor(
                 val hopsList = mutableListOf<TracerouteHop>()
                 var consecutiveTimeouts = 0
 
+                val isIpv6 = targetIp.contains(":")
                 val pingExecutable = when {
+                    isIpv6 && java.io.File("/system/bin/ping6").exists() -> "/system/bin/ping6"
                     java.io.File("/system/bin/ping").exists() -> "/system/bin/ping"
+                    isIpv6 -> "ping6"
                     else -> "ping"
+                }
+
+                val baseArgs = mutableListOf(pingExecutable)
+                if (isIpv6 && pingExecutable != "/system/bin/ping6") {
+                    baseArgs.add("-6")
                 }
 
                 for (ttl in 1..maxHops) {
@@ -102,13 +112,10 @@ class TracerouteService @Inject constructor(
                     withTimeoutOrNull(2500L) {
                         var process: Process? = null
                         try {
-                            val pb = ProcessBuilder(
-                                pingExecutable,
-                                "-c", "1",
-                                "-W", "2",
-                                "-t", ttl.toString(),
-                                cleanHost
-                            )
+                            val cmd = ArrayList(baseArgs).apply {
+                                addAll(listOf("-c", "1", "-W", "2", "-t", ttl.toString(), cleanHost))
+                            }
+                            val pb = ProcessBuilder(cmd)
                             pb.redirectErrorStream(true)
                             process = pb.start()
 
@@ -131,7 +138,7 @@ class TracerouteService @Inject constructor(
                     if (TracerouteOutputParser.isTtlFlagUnsupported(outputLines)) {
                         _tracerouteState.value = _tracerouteState.value.copy(
                             isRunning = false,
-                            errorMessage = "Lệnh ping trên thiết bị này không hỗ trợ cờ '-t' (TTL). Các nhà sản xuất (OEM) có thể dùng các cờ khác hoặc hạn chế traceroute khi không có quyền root."
+                            error = UiText.StringResource(R.string.err_traceroute_ttl_unsupported)
                         )
                         return@launch
                     }
@@ -144,9 +151,13 @@ class TracerouteService @Inject constructor(
 
                         var hostname: String? = null
                         try {
-                            val hInet = InetAddress.getByName(parsed.ip)
-                            val hostNameStr = hInet.canonicalHostName
-                            if (hostNameStr != parsed.ip) {
+                            val hostNameStr = withTimeoutOrNull(1500L) {
+                                withContext(Dispatchers.IO) {
+                                    val hInet = InetAddress.getByName(parsed.ip)
+                                    hInet.canonicalHostName
+                                }
+                            }
+                            if (hostNameStr != null && hostNameStr != parsed.ip && hostNameStr.isNotBlank()) {
                                 hostname = hostNameStr
                             }
                         } catch (_: Exception) {}
@@ -208,7 +219,7 @@ class TracerouteService @Inject constructor(
             } catch (e: Exception) {
                 _tracerouteState.value = _tracerouteState.value.copy(
                     isRunning = false,
-                    errorMessage = "Lỗi khi traceroute: ${e.localizedMessage}"
+                    error = UiText.StringResource(R.string.err_generic_service_error, "Traceroute", e.localizedMessage ?: "")
                 )
             }
         }

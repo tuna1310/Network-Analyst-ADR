@@ -21,14 +21,19 @@ import javax.inject.Singleton
 @Singleton
 class WhoisRdapService @Inject constructor() {
 
-    // Bộ nhớ đệm các file bootstrap IANA để tránh tải lại liên tục
-    private val bootstrapCache = ConcurrentHashMap<String, String>()
+    data class CachedBootstrap(val content: String, val timestamp: Long)
+
+    // Bộ nhớ đệm các file bootstrap IANA với thời hạn 24 giờ để tránh tải lại liên tục
+    private val bootstrapCache = ConcurrentHashMap<String, CachedBootstrap>()
 
     companion object {
         const val IANA_DNS_BOOTSTRAP = "https://data.iana.org/rdap/dns.json"
         const val IANA_IPV4_BOOTSTRAP = "https://data.iana.org/rdap/ipv4.json"
         const val IANA_IPV6_BOOTSTRAP = "https://data.iana.org/rdap/ipv6.json"
         const val IANA_ASN_BOOTSTRAP = "https://data.iana.org/rdap/asn.json"
+
+        // Thời hạn lưu bộ đệm Bootstrap: 24 giờ
+        const val BOOTSTRAP_CACHE_TTL_MS = 24 * 60 * 60 * 1000L
 
         const val RDAP_ORG_BASE = "https://rdap.org"
         const val DEFAULT_WHOIS_SERVER = "whois.iana.org"
@@ -120,57 +125,17 @@ class WhoisRdapService @Inject constructor() {
                 WhoisQueryType.ASN -> IANA_ASN_BOOTSTRAP
             }
 
-            val bootstrapJson = bootstrapCache.getOrPut(bootstrapUrl) {
-                fetchHttpsUrl(bootstrapUrl) ?: return null
+            val now = System.currentTimeMillis()
+            val cached = bootstrapCache[bootstrapUrl]
+            val bootstrapJson = if (cached != null && (now - cached.timestamp) < BOOTSTRAP_CACHE_TTL_MS) {
+                cached.content
+            } else {
+                val fetched = fetchHttpsUrl(bootstrapUrl) ?: return null
+                bootstrapCache[bootstrapUrl] = CachedBootstrap(fetched, now)
+                fetched
             }
 
-            val root = JSONObject(bootstrapJson)
-            val services = root.optJSONArray("services") ?: return null
-
-            when (queryType) {
-                WhoisQueryType.DOMAIN -> {
-                    val tld = target.substringAfterLast(".").lowercase()
-                    for (i in 0 until services.length()) {
-                        val item = services.optJSONArray(i) ?: continue
-                        val tlds = item.optJSONArray(0) ?: continue
-                        val urls = item.optJSONArray(1) ?: continue
-                        for (j in 0 until tlds.length()) {
-                            if (tlds.optString(j).lowercase() == tld) {
-                                return urls.optString(0, null)
-                            }
-                        }
-                    }
-                }
-                WhoisQueryType.ASN -> {
-                    val asNum = target.uppercase().removePrefix("AS").toLongOrNull() ?: return null
-                    for (i in 0 until services.length()) {
-                        val item = services.optJSONArray(i) ?: continue
-                        val ranges = item.optJSONArray(0) ?: continue
-                        val urls = item.optJSONArray(1) ?: continue
-                        for (j in 0 until ranges.length()) {
-                            val r = ranges.optString(j)
-                            if (r.contains("-")) {
-                                val parts = r.split("-")
-                                val start = parts[0].toLongOrNull() ?: 0L
-                                val end = parts[1].toLongOrNull() ?: 0L
-                                if (asNum in start..end) {
-                                    return urls.optString(0, null)
-                                }
-                            } else {
-                                if (r.toLongOrNull() == asNum) {
-                                    return urls.optString(0, null)
-                                }
-                            }
-                        }
-                    }
-                }
-                WhoisQueryType.IP -> {
-                    // Đối với IP, tra cứu theo TLD/Prefix hoặc lùi về service đầu tiên khớp
-                    val firstUrl = services.optJSONArray(0)?.optJSONArray(1)?.optString(0, null)
-                    return firstUrl
-                }
-            }
-            null
+            WhoisRdapParser.findBootstrapUrl(bootstrapJson, target, queryType)
         } catch (_: Exception) {
             null
         }
@@ -229,38 +194,51 @@ class WhoisRdapService @Inject constructor() {
 
     /**
      * Truy vấn Whois qua TCP Port 43:
-     * 1. Gửi query tới whois.iana.org:43
-     * 2. Tìm referral host (refer: <host>)
-     * 3. Kiểm tra tính hợp lệ của referral host (chống SSRF)
-     * 4. Tiếp tục truy vấn tối đa 3 lần chuyển tiếp
+     * 1. Phân giải và kiểm tra máy chủ an toàn (loại trừ private/loopback/link-local/CGNAT)
+     * 2. Kết nối trực tiếp tới IP đã phân giải (ngăn chặn tấn công DNS Rebinding)
+     * 3. Tìm referral host (refer: <host>)
+     * 4. Lặp lại tối đa 3 lần chuyển tiếp an toàn
      */
     private suspend fun queryWhoisTcpWithReferral(target: String): String = withContext(Dispatchers.IO) {
         var currentServer = DEFAULT_WHOIS_SERVER
+        var currentAddress = WhoisRdapParser.resolveSafeReferralAddress(currentServer)
+        if (currentAddress == null) {
+            return@withContext "Cannot resolve primary Whois server $DEFAULT_WHOIS_SERVER."
+        }
+
         var currentOutput = ""
         var hopCount = 0
 
         while (hopCount < MAX_WHOIS_REFERRALS) {
+            val addr = currentAddress ?: break
             hopCount++
-            val rawResponse = querySingleWhoisServer(currentServer, target)
+            val rawResponse = querySingleWhoisServer(addr, currentServer, target)
             currentOutput = rawResponse
 
             val referral = WhoisRdapParser.parseWhoisReferral(rawResponse)
-            if (referral != null && referral != currentServer && WhoisRdapParser.isValidReferralHost(referral)) {
-                currentServer = referral
+            if (referral != null && referral != currentServer) {
+                val nextAddress = WhoisRdapParser.resolveSafeReferralAddress(referral)
+                if (nextAddress != null) {
+                    currentServer = referral
+                    currentAddress = nextAddress
+                } else {
+                    break
+                }
             } else {
                 break
             }
         }
 
-        currentOutput.ifEmpty { "Không nhận được phản hồi từ máy chủ Whois." }
+        currentOutput.ifEmpty { "No response received from Whois server." }
     }
 
-    private fun querySingleWhoisServer(server: String, target: String): String {
+    private fun querySingleWhoisServer(address: java.net.InetAddress, serverName: String, target: String): String {
         var socket: Socket? = null
         return try {
             socket = Socket()
             socket.soTimeout = SOCKET_TIMEOUT_MS
-            socket.connect(InetSocketAddress(server, 43), SOCKET_TIMEOUT_MS)
+            // Connect to verified safe address
+            socket.connect(InetSocketAddress(address, 43), SOCKET_TIMEOUT_MS)
 
             val writer = OutputStreamWriter(socket.getOutputStream(), "UTF-8")
             writer.write("$target\r\n")
@@ -286,7 +264,7 @@ class WhoisRdapService @Inject constructor() {
 
             byteStream.toString("UTF-8")
         } catch (e: Exception) {
-            "Lỗi kết nối tới máy chủ Whois $server: ${e.localizedMessage}"
+            "Failed to connect to Whois server $serverName (${address.hostAddress}): ${e.localizedMessage}"
         } finally {
             try {
                 socket?.close()

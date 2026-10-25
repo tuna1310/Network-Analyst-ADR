@@ -145,7 +145,7 @@ object WhoisRdapParser {
                 asnName = asnName
             )
         } catch (_: Exception) {
-            WhoisSummary(entityName = "Lỗi phân tích cú pháp RDAP JSON")
+            WhoisSummary()
         }
     }
 
@@ -196,22 +196,138 @@ object WhoisRdapParser {
     }
 
     /**
-     * Xác thực máy chủ referral chống tấn công SSRF (Server-Side Request Forgery).
-     * Tuyệt đối không cho phép chuyển tiếp tới IP nội bộ, loopback, CGNAT hoặc private IP.
+     * Xác thực máy chủ referral chống tấn công SSRF (Server-Side Request Forgery)
+     * và ngăn chặn tấn công DNS Rebinding bằng cách phân giải hostname và trả về
+     * chính InetAddress an toàn đã được kiểm tra (không thuộc private/loopback/link-local/CGNAT).
      */
-    fun isValidReferralHost(host: String): Boolean {
+    fun resolveSafeReferralAddress(host: String): InetAddress? {
         val clean = host.trim().lowercase()
-        if (clean.isEmpty()) return false
-        if (clean == "localhost" || clean == "127.0.0.1" || clean == "::1") return false
-        if (PortRangeParser.isPrivateIp(clean)) return false
+        if (clean.isEmpty()) return null
+        if (clean == "localhost" || clean == "127.0.0.1" || clean == "::1") return null
+        if (PortRangeParser.isPrivateIp(clean)) return null
 
-        // Kiểm tra xem host có phân giải ra IP private hay không
         return try {
             val inet = InetAddress.getByName(clean)
-            val ip = inet.hostAddress ?: clean
-            !PortRangeParser.isPrivateIp(ip)
+            val ip = inet.hostAddress ?: return null
+            if (PortRangeParser.isPrivateIp(ip)) {
+                null
+            } else {
+                inet
+            }
         } catch (_: Exception) {
-            false
+            null
+        }
+    }
+
+    fun isValidReferralHost(host: String): Boolean {
+        return resolveSafeReferralAddress(host) != null
+    }
+
+    /**
+     * Phân tích tệp JSON Bootstrap từ IANA (dns.json, ipv4.json, ipv6.json, asn.json)
+     * để tìm URL của máy chủ RDAP có thẩm quyền (authoritative RDAP server).
+     *
+     * Cấu trúc chuẩn theo RFC 9224:
+     * {
+     *   "description": "...",
+     *   "publication": "...",
+     *   "services": [
+     *     [ ["com", "net"], ["https://rdap.verisign.com/com/v1/"] ],
+     *     [ ["1.0.0.0/8"], ["https://rdap.apnic.net/"] ],
+     *     [ ["64496-64511"], ["https://rdap.iana.org/"] ]
+     *   ]
+     * }
+     */
+    fun findBootstrapUrl(bootstrapJson: String, target: String, queryType: WhoisQueryType): String? {
+        return try {
+            val root = JSONObject(bootstrapJson)
+            val services = root.optJSONArray("services") ?: return null
+
+            when (queryType) {
+                WhoisQueryType.DOMAIN -> {
+                    val tld = target.trim().substringAfterLast(".").lowercase()
+                    if (tld.isEmpty()) return null
+                    for (i in 0 until services.length()) {
+                        val item = services.optJSONArray(i) ?: continue
+                        val tlds = item.optJSONArray(0) ?: continue
+                        val urls = item.optJSONArray(1) ?: continue
+                        for (j in 0 until tlds.length()) {
+                            if (tlds.optString(j).lowercase() == tld) {
+                                val url = urls.optString(0)
+                                if (url.isNotBlank()) return url
+                            }
+                        }
+                    }
+                }
+                WhoisQueryType.ASN -> {
+                    val asNum = target.trim().uppercase().removePrefix("AS").toLongOrNull() ?: return null
+                    for (i in 0 until services.length()) {
+                        val item = services.optJSONArray(i) ?: continue
+                        val ranges = item.optJSONArray(0) ?: continue
+                        val urls = item.optJSONArray(1) ?: continue
+                        for (j in 0 until ranges.length()) {
+                            val r = ranges.optString(j).trim()
+                            if (r.contains("-")) {
+                                val parts = r.split("-")
+                                val start = parts[0].trim().toLongOrNull() ?: 0L
+                                val end = parts[1].trim().toLongOrNull() ?: 0L
+                                if (asNum in start..end) {
+                                    val url = urls.optString(0)
+                                    if (url.isNotBlank()) return url
+                                }
+                            } else {
+                                if (r.toLongOrNull() == asNum) {
+                                    val url = urls.optString(0)
+                                    if (url.isNotBlank()) return url
+                                }
+                            }
+                        }
+                    }
+                }
+                WhoisQueryType.IP -> {
+                    val cleanIp = target.trim()
+                    if (cleanIp.contains(":")) {
+                        // IPv6: khớp theo prefix hexa đơn giản
+                        val normIp = cleanIp.lowercase()
+                        for (i in 0 until services.length()) {
+                            val item = services.optJSONArray(i) ?: continue
+                            val prefixes = item.optJSONArray(0) ?: continue
+                            val urls = item.optJSONArray(1) ?: continue
+                            for (j in 0 until prefixes.length()) {
+                                val p = prefixes.optString(j).substringBefore("/").trim().lowercase()
+                                if (p.isNotEmpty() && normIp.startsWith(p.substringBefore("::"))) {
+                                    val url = urls.optString(0)
+                                    if (url.isNotBlank()) return url
+                                }
+                            }
+                        }
+                    } else {
+                        // IPv4: khớp theo octet đầu tiên của CIDR /8 hoặc /16
+                        val firstOctet = cleanIp.substringBefore(".").toIntOrNull()
+                        if (firstOctet != null) {
+                            for (i in 0 until services.length()) {
+                                val item = services.optJSONArray(i) ?: continue
+                                val cidrs = item.optJSONArray(0) ?: continue
+                                val urls = item.optJSONArray(1) ?: continue
+                                for (j in 0 until cidrs.length()) {
+                                    val cidr = cidrs.optString(j).trim()
+                                    val cidrFirstOctet = cidr.substringBefore(".").toIntOrNull()
+                                    if (cidrFirstOctet != null && cidrFirstOctet == firstOctet) {
+                                        val url = urls.optString(0)
+                                        if (url.isNotBlank()) return url
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Nếu không khớp prefix cụ thể, dùng service đầu tiên nếu có
+                    val firstUrl = services.optJSONArray(0)?.optJSONArray(1)?.optString(0)
+                    if (!firstUrl.isNullOrBlank()) return firstUrl
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 

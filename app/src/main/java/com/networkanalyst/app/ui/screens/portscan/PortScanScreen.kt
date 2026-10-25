@@ -101,7 +101,7 @@ fun PortScanScreen(
             showConfirmFullScanDialog = true
             return
         }
-        viewModel.startScan(activity)
+        viewModel.startScan(activity, context)
     }
 
     Scaffold(
@@ -113,10 +113,10 @@ fun PortScanScreen(
                         IconButton(onClick = {
                             viewModel.saveResultsToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả quét cổng vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.portscan_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -147,14 +147,14 @@ fun PortScanScreen(
                     OutlinedTextField(
                         value = target,
                         onValueChange = { viewModel.setTarget(it) },
-                        label = { Text("IP hoặc tên miền mục tiêu") },
-                        placeholder = { Text("192.168.1.1 hoặc domain.com") },
+                        label = { Text(stringResource(R.string.portscan_target_label)) },
+                        placeholder = { Text(stringResource(R.string.portscan_target_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (target.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setTarget("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                                 }
                             }
                         }
@@ -162,7 +162,7 @@ fun PortScanScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text("Chế độ quét:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.portscan_mode_label), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
@@ -188,8 +188,8 @@ fun PortScanScreen(
                         OutlinedTextField(
                             value = customInput,
                             onValueChange = { viewModel.setCustomPortsInput(it) },
-                            label = { Text("Danh sách cổng (Ví dụ: 80, 443, 8000-8080)") },
-                            placeholder = { Text("80, 443, 8000-8080") },
+                            label = { Text(stringResource(R.string.portscan_custom_ports_label)) },
+                            placeholder = { Text(stringResource(R.string.portscan_sample_custom_ports)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
@@ -204,7 +204,7 @@ fun PortScanScreen(
                         Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "$portCount cổng • Ước tính: ~$estSeconds giây (Đồng thời 200, Timeout thích ứng)",
+                            text = stringResource(R.string.portscan_estimate_format, portCount, estSeconds, 200),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -219,8 +219,8 @@ fun PortScanScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Đọc banner dịch vụ (Banner Grab)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            Text("Chỉ chạy khi có cổng mở (HTTP, SSH, FTP)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.portscan_banner_grab_title), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.portscan_banner_grab_desc), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(
                             checked = enableBannerGrab,
@@ -314,7 +314,7 @@ fun PortScanScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (state.isPaused) "Đã tạm dừng: ${state.currentPort ?: ""}" else "Đang quét cổng: ${state.currentPort ?: ""}",
+                                text = if (state.isPaused) stringResource(R.string.portscan_status_paused, state.scannedCount, state.totalCount) else stringResource(R.string.portscan_status_scanning, state.scannedCount, state.totalCount, state.currentPort ?: ""),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -329,10 +329,11 @@ fun PortScanScreen(
                 }
             }
 
-            if (state.errorMessage != null) {
+            val error = state.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = state.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -362,7 +363,7 @@ fun PortScanScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Cổng mở phát hiện (${state.openPorts.size})",
+                    text = stringResource(R.string.portscan_results_title, state.openPorts.size),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -381,7 +382,7 @@ fun PortScanScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (state.scannedCount > 0) "Không phát hiện cổng mở nào trong dải vừa quét." else "Nhấn 'Bắt đầu quét cổng' để kiểm tra.",
+                        text = if (state.scannedCount > 0) stringResource(R.string.portscan_empty_open) else stringResource(R.string.portscan_status_idle),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -410,7 +411,7 @@ fun PortScanScreen(
                 if (mode == PortScanMode.FULL_RANGE) {
                     showConfirmFullScanDialog = true
                 } else {
-                    viewModel.startScan(activity)
+                    viewModel.startScan(activity, context)
                 }
             }
         )
@@ -435,7 +436,7 @@ fun PortScanScreen(
                 Button(
                     onClick = {
                         showConfirmFullScanDialog = false
-                        viewModel.startScan(activity)
+                        viewModel.startScan(activity, context)
                     }
                 ) {
                     Text(stringResource(R.string.port_scan_start))
@@ -513,7 +514,7 @@ fun PortRow(item: PortScanItem) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Cổng ${item.port}",
+                        text = stringResource(R.string.portscan_port_format, item.port, item.serviceName),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )

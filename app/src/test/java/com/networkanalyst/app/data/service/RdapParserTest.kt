@@ -3,6 +3,7 @@ package com.networkanalyst.app.data.service
 import com.networkanalyst.app.data.model.WhoisQueryType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -116,6 +117,7 @@ class RdapParserTest {
         val badJson = "not a valid json {{"
         val summary = WhoisRdapParser.parseRdapResponse(badJson, WhoisQueryType.DOMAIN)
         assertNotNull(summary)
-        assertTrue(summary.entityName?.contains("Lỗi") == true)
+        assertNull(summary.entityName)
+        assertNull(summary.registrar)
     }
 }

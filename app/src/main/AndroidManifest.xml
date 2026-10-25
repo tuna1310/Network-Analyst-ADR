@@ -18,6 +18,9 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="tiramisu" />
 
+    <!-- Optional Runtime permission: For multi-SIM and mobile network details -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <application
         android:name=".NetworkAnalystApp"
         android:allowBackup="false"

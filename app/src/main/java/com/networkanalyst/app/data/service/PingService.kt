@@ -1,7 +1,9 @@
 package com.networkanalyst.app.data.service
 
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.PingPacket
 import com.networkanalyst.app.data.model.PingSummary
+import com.networkanalyst.app.ui.components.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +29,7 @@ data class PingSessionState(
     val resolvedIp: String? = null,
     val packets: List<PingPacket> = emptyList(),
     val summary: PingSummary? = null,
-    val errorMessage: String? = null
+    val error: UiText? = null
 )
 
 @Singleton
@@ -45,7 +47,7 @@ class PingService @Inject constructor() {
             val cleanHost = host.trim()
             if (cleanHost.isEmpty()) {
                 _pingState.value = PingSessionState(
-                    errorMessage = "Vui lòng nhập địa chỉ IP hoặc tên miền hợp lệ."
+                    error = UiText.StringResource(R.string.err_invalid_target)
                 )
                 return@launch
             }
@@ -69,7 +71,7 @@ class PingService @Inject constructor() {
                     _pingState.value = PingSessionState(
                         isRunning = false,
                         target = cleanHost,
-                        errorMessage = "Không thể phân giải tên miền: $cleanHost"
+                        error = UiText.StringResource(R.string.err_host_unresolved, cleanHost)
                     )
                     return@launch
                 }
@@ -90,7 +92,7 @@ class PingService @Inject constructor() {
             } catch (e: Exception) {
                 _pingState.value = _pingState.value.copy(
                     isRunning = false,
-                    errorMessage = "Lỗi khi ping: ${e.localizedMessage}"
+                    error = UiText.StringResource(R.string.err_generic_service_error, "Ping", e.localizedMessage ?: "")
                 )
             }
         }
@@ -113,17 +115,21 @@ class PingService @Inject constructor() {
         val maxWaitMs = (count * timeoutSec * 1500L).coerceAtLeast(4000L)
 
         try {
+            val isIpv6 = ip.contains(":")
             val pingExecutable = when {
+                isIpv6 && java.io.File("/system/bin/ping6").exists() -> "/system/bin/ping6"
                 java.io.File("/system/bin/ping").exists() -> "/system/bin/ping"
+                isIpv6 -> "ping6"
                 else -> "ping"
             }
 
-            val processBuilder = ProcessBuilder(
-                pingExecutable,
-                "-c", count.toString(),
-                "-W", timeoutSec.toString(),
-                host
-            )
+            val command = mutableListOf(pingExecutable)
+            if (isIpv6 && pingExecutable != "/system/bin/ping6") {
+                command.add("-6")
+            }
+            command.addAll(listOf("-c", count.toString(), "-W", timeoutSec.toString(), host))
+
+            val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
             process = processBuilder.start()
 
@@ -174,11 +180,11 @@ class PingService @Inject constructor() {
             }
 
             if (success == null) {
-                // Timeout quá thời hạn cho phép
+                // Timeout
                 process?.destroyForcibly()
                 if (packetsList.isEmpty()) {
                     _pingState.value = _pingState.value.copy(
-                        errorMessage = "Hết thời gian chờ phản hồi từ lệnh ping hệ thống."
+                        error = UiText.StringResource(R.string.err_ping_timeout)
                     )
                 }
             }
@@ -212,12 +218,10 @@ class PingService @Inject constructor() {
                 true
             } else {
                 // Không bắt được gói tin nào từ binary ping của hãng
-                val errorMsg = PingOutputParser.parseErrorMessage(errorOutput.toString())
-                if (errorMsg.isNotBlank() && !errorMsg.contains("chuyển sang")) {
-                    _pingState.value = _pingState.value.copy(
-                        errorMessage = errorMsg
-                    )
-                }
+                val errorUiText = PingOutputParser.parseErrorMessage(errorOutput.toString())
+                _pingState.value = _pingState.value.copy(
+                    error = errorUiText
+                )
                 false
             }
         } catch (e: Exception) {
@@ -283,7 +287,7 @@ class PingService @Inject constructor() {
                         rttMs = 0.0,
                         ttl = 0,
                         isSuccess = false,
-                        errorMessage = "Hết thời gian chờ (Request timed out)"
+                        errorMessage = null
                     )
                 )
             }

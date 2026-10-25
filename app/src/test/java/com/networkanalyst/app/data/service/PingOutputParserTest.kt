@@ -1,11 +1,18 @@
 package com.networkanalyst.app.data.service
 
+import com.networkanalyst.app.R
+import com.networkanalyst.app.ui.components.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Kiểm thử bộ phân tích chuỗi đầu ra của lệnh ping.
+ * Lưu ý: Toàn bộ mẫu đầu vào trong test suite này là fixture tự soạn theo định dạng chuẩn
+ * của iputils và toybox (chưa được kiểm chứng thực tế trên từng thiết bị phần cứng của các hãng máy).
+ */
 class PingOutputParserTest {
 
     @Test
@@ -88,18 +95,18 @@ class PingOutputParserTest {
     @Test
     fun parseErrorMessage_mapsFriendlyErrors() {
         val err1 = PingOutputParser.parseErrorMessage("ping: unknown host invalid-domain.test")
-        assertTrue(err1.contains("Tên miền không tồn tại"))
+        assertTrue(err1 is UiText.StringResource && err1.resId == R.string.err_dns_nxdomain)
 
         val err2 = PingOutputParser.parseErrorMessage("connect: Network is unreachable")
-        assertTrue(err2.contains("Mạng không khả dụng"))
+        assertTrue(err2 is UiText.StringResource && err2.resId == R.string.err_ping_network_unreachable)
 
         val err3 = PingOutputParser.parseErrorMessage("ping: sendmsg: Operation not permitted")
-        assertTrue(err3.contains("chuyển sang cơ chế kiểm tra socket"))
+        assertTrue(err3 is UiText.StringResource && err3.resId == R.string.err_ping_permission_denied)
 
         val err4 = PingOutputParser.parseErrorMessage("100% packet loss, Request Timed Out")
-        assertTrue(err4.contains("Hết thời gian chờ"))
+        assertTrue(err4 is UiText.StringResource && err4.resId == R.string.err_ping_packet_loss)
 
         val err5 = PingOutputParser.parseErrorMessage("ping: icmp open socket: Permission denied")
-        assertTrue(err5.contains("chuyển sang cơ chế kiểm tra socket"))
+        assertTrue(err5 is UiText.StringResource && err5.resId == R.string.err_ping_permission_denied)
     }
 }

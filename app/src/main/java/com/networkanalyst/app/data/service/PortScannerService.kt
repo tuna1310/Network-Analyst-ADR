@@ -1,7 +1,9 @@
 package com.networkanalyst.app.data.service
 
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.model.PortScanItem
 import com.networkanalyst.app.data.model.PortState
+import com.networkanalyst.app.ui.components.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +46,7 @@ data class PortScanProgress(
     val closedCount: Int = 0,
     val filteredCount: Int = 0,
     val errorCount: Int = 0,
-    val errorMessage: String? = null
+    val error: UiText? = null
 )
 
 @Singleton
@@ -117,20 +119,20 @@ class PortScannerService @Inject constructor() {
             val cleanHost = host.trim()
             if (cleanHost.isEmpty()) {
                 _scanState.value = PortScanProgress(
-                    errorMessage = "Vui lòng nhập địa chỉ IP hoặc tên miền hợp lệ."
+                    error = UiText.StringResource(R.string.err_invalid_target)
                 )
                 return@launch
             }
 
             if (ports.isEmpty()) {
                 _scanState.value = PortScanProgress(
-                    errorMessage = "Danh sách cổng quét không thể để trống."
+                    error = UiText.StringResource(R.string.err_port_list_empty)
                 )
                 return@launch
             }
 
             try {
-                // Bắt buộc phân giải IP trước để xác định LAN/WAN, không đoán qua hostname
+                // Pre-resolve IP to classify LAN/WAN
                 val inetAddress = withContext(Dispatchers.IO) {
                     try {
                         InetAddress.getByName(cleanHost)
@@ -143,7 +145,7 @@ class PortScannerService @Inject constructor() {
                     _scanState.value = PortScanProgress(
                         isScanning = false,
                         target = cleanHost,
-                        errorMessage = "Không thể phân giải tên miền: $cleanHost"
+                        error = UiText.StringResource(R.string.err_host_unresolved, cleanHost)
                     )
                     return@launch
                 }
@@ -186,7 +188,7 @@ class PortScannerService @Inject constructor() {
             } catch (e: Exception) {
                 _scanState.value = _scanState.value.copy(
                     isScanning = false,
-                    errorMessage = "Lỗi khi quét cổng: ${e.localizedMessage}"
+                    error = UiText.StringResource(R.string.err_generic_service_error, "Port scan", e.localizedMessage ?: "")
                 )
             }
         }
@@ -330,7 +332,7 @@ class PortScannerService @Inject constructor() {
                 socket.connect(InetSocketAddress(ip, port), timeoutMs)
 
                 val elapsed = System.currentTimeMillis() - startTime
-                val serviceName = SERVICE_MAP[port] ?: "Cổng $port"
+                val serviceName = SERVICE_MAP[port] ?: "Port $port"
 
                 val banner = if (enableBannerGrab) grabBanner(socket, port) else null
 
@@ -344,34 +346,34 @@ class PortScannerService @Inject constructor() {
                     )
                 )
             } catch (e: ConnectException) {
-                // RST received -> Cổng đóng (Closed)
+                // RST received -> Closed
                 continuation.resume(
                     PortScanItem(
                         port = port,
                         state = PortState.CLOSED,
-                        serviceName = SERVICE_MAP[port] ?: "Cổng $port",
+                        serviceName = SERVICE_MAP[port] ?: "Port $port",
                         responseTimeMs = System.currentTimeMillis() - startTime
                     )
                 )
             } catch (e: SocketTimeoutException) {
-                // Timeout -> Bị lọc / tường lửa chặn (Filtered)
+                // Timeout -> Filtered
                 continuation.resume(
                     PortScanItem(
                         port = port,
                         state = PortState.FILTERED,
-                        serviceName = SERVICE_MAP[port] ?: "Cổng $port",
+                        serviceName = SERVICE_MAP[port] ?: "Port $port",
                         responseTimeMs = timeoutMs.toLong()
                     )
                 )
             } catch (e: CancellationException) {
-                // Đã bị hủy từ bên ngoài
+                // Cancelled
             } catch (e: Exception) {
                 if (continuation.isActive) {
                     continuation.resume(
                         PortScanItem(
                             port = port,
                             state = PortState.ERROR,
-                            serviceName = SERVICE_MAP[port] ?: "Cổng $port",
+                            serviceName = SERVICE_MAP[port] ?: "Port $port",
                             banner = e.localizedMessage
                         )
                     )

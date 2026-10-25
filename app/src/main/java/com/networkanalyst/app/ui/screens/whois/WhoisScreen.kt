@@ -86,10 +86,10 @@ fun WhoisScreen(
                         IconButton(onClick = {
                             viewModel.saveResultToHistory()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã lưu kết quả Whois vào Lịch sử!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.whois_saved_history))
                             }
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Lưu")
+                            Icon(Icons.Default.Bookmark, contentDescription = stringResource(R.string.save))
                         }
                     }
                 },
@@ -120,14 +120,14 @@ fun WhoisScreen(
                     OutlinedTextField(
                         value = uiState.target,
                         onValueChange = { viewModel.setTarget(it) },
-                        label = { Text("Tên miền, Địa chỉ IP hoặc ASN") },
-                        placeholder = { Text("google.com, 1.1.1.1, AS15169") },
+                        label = { Text(stringResource(R.string.whois_target_label)) },
+                        placeholder = { Text(stringResource(R.string.whois_sample_domain)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (uiState.target.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setTarget("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                                 }
                             }
                         }
@@ -152,7 +152,7 @@ fun WhoisScreen(
                         FilterChip(
                             selected = uiState.target == "AS15169",
                             onClick = { viewModel.setTarget("AS15169") },
-                            label = { Text("AS15169 (Google)", fontSize = 11.sp) }
+                            label = { Text(stringResource(R.string.whois_chip_google), fontSize = 11.sp) }
                         )
                     }
 
@@ -166,7 +166,7 @@ fun WhoisScreen(
                         if (uiState.isLoading) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Đang tra cứu...")
+                            Text(stringResource(R.string.whois_status_querying))
                         } else {
                             Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -176,10 +176,11 @@ fun WhoisScreen(
                 }
             }
 
-            if (uiState.errorMessage != null) {
+            val error = uiState.error
+            if (error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = uiState.errorMessage ?: "",
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -215,7 +216,7 @@ fun WhoisScreen(
                         onCopy = {
                             clipboardManager.setText(AnnotatedString(res.rawContent))
                             scope.launch {
-                                snackbarHostState.showSnackbar("Đã sao chép vào bộ nhớ tạm!")
+                                snackbarHostState.showSnackbar(context.getString(R.string.copied_to_clipboard))
                             }
                         }
                     )
@@ -228,7 +229,7 @@ fun WhoisScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nhập tên miền, IP hoặc ASN để tra cứu thông tin Whois / RDAP.",
+                        text = stringResource(R.string.whois_empty_prompt),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -283,12 +284,12 @@ fun WhoisSummaryView(result: WhoisResult) {
 
         // Entity / Domain
         summary.entityName?.let {
-            WhoisInfoCard(label = "Chủ sở hữu / Thực thể", value = it)
+            WhoisInfoCard(label = stringResource(R.string.whois_owner), value = it)
         }
 
         // Registrar
         summary.registrar?.let {
-            WhoisInfoCard(label = "Nhà đăng ký (Registrar)", value = it)
+            WhoisInfoCard(label = stringResource(R.string.whois_registrar), value = it)
         }
 
         // Dates
@@ -299,18 +300,18 @@ fun WhoisSummaryView(result: WhoisResult) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Thông tin thời gian", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.whois_time_info), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
-                    summary.createdDate?.let { Text("• Ngày tạo: $it", fontSize = 13.sp) }
-                    summary.updatedDate?.let { Text("• Ngày cập nhật: $it", fontSize = 13.sp) }
-                    summary.expiresDate?.let { Text("• Ngày hết hạn: $it", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    summary.createdDate?.let { Text(stringResource(R.string.whois_created, it), fontSize = 13.sp) }
+                    summary.updatedDate?.let { Text(stringResource(R.string.whois_updated, it), fontSize = 13.sp) }
+                    summary.expiresDate?.let { Text(stringResource(R.string.whois_expires, it), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
 
         // CIDR / IP Range / ASN
         summary.cidr?.let {
-            WhoisInfoCard(label = "Dải mạng (CIDR)", value = it)
+            WhoisInfoCard(label = stringResource(R.string.whois_cidr), value = it)
         }
         summary.asnNumber?.let {
             WhoisInfoCard(label = "ASN", value = "$it (${summary.asnName ?: ""})")
@@ -324,7 +325,7 @@ fun WhoisSummaryView(result: WhoisResult) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Trạng thái", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.whois_status), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         summary.statuses.forEach { st ->
@@ -345,7 +346,7 @@ fun WhoisSummaryView(result: WhoisResult) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Máy chủ tên miền (Nameservers)", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.whois_nameservers), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     summary.nameservers.forEach { ns ->
                         Text("• $ns", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
@@ -356,7 +357,7 @@ fun WhoisSummaryView(result: WhoisResult) {
 
         // Contact Email
         summary.contactEmail?.let {
-            WhoisInfoCard(label = "Email liên hệ / Lạm dụng", value = it)
+            WhoisInfoCard(label = stringResource(R.string.whois_contact_email), value = it)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -393,7 +394,7 @@ fun WhoisRawView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Dung lượng: ${result.rawContent.length} bytes",
+                text = stringResource(R.string.whois_size_bytes, result.rawContent.length),
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -1,6 +1,7 @@
 package com.networkanalyst.app.ui.screens.portscan
 
 import android.app.Activity
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.networkanalyst.app.data.local.HistoryDao
@@ -11,6 +12,7 @@ import com.networkanalyst.app.data.service.DiagnosticsHelper
 import com.networkanalyst.app.data.service.PortRangeParser
 import com.networkanalyst.app.data.service.PortScanProgress
 import com.networkanalyst.app.data.service.PortScannerService
+import com.networkanalyst.app.ui.components.ScanPolicyHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,8 +21,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class PortScanMode(val displayName: String) {
-    COMMON("Phổ biến"),
-    CUSTOM("Tùy chọn"),
+    COMMON("Common"),
+    CUSTOM("Custom"),
     FULL_RANGE("1 - 65535")
 }
 
@@ -91,7 +93,11 @@ class PortScanViewModel @Inject constructor(
         return PortRangeParser.estimateDurationSeconds(count, _concurrencyLimit.value, timeoutMs)
     }
 
-    fun startScan(activity: Activity? = null) {
+    fun startScan(activity: Activity? = null, context: Context? = null) {
+        // Chặn quét nếu người dùng từ chối hoặc chưa đồng ý chính sách ủy quyền mạng
+        if (context != null && !ScanPolicyHelper.hasAgreedToScanPolicy(context)) {
+            return
+        }
         adService.recordToolAction(activity)
         val ports = getTargetPorts()
 
@@ -99,7 +105,7 @@ class PortScanViewModel @Inject constructor(
             host = _targetHost.value,
             ports = ports,
             concurrencyLimit = _concurrencyLimit.value,
-            customTimeoutMs = null, // Tự động thích ứng LAN/WAN
+            customTimeoutMs = null, // Adaptive LAN/WAN timeout
             enableBannerGrab = _enableBannerGrab.value
         )
     }
@@ -120,16 +126,16 @@ class PortScanViewModel @Inject constructor(
     fun saveResultsToHistory() {
         viewModelScope.launch {
             val state = scanState.value
-            val summaryText = "Quét cổng ${state.target}: ${state.openPorts.size} mở, ${state.closedCount} đóng, ${state.filteredCount} chặn / ${state.scannedCount} đã quét"
+            val summaryText = "Port scan ${state.target}: ${state.openPorts.size} open, ${state.closedCount} closed, ${state.filteredCount} filtered / ${state.scannedCount} scanned"
             val details = buildString {
-                appendLine("Mục tiêu: ${state.target} (${state.resolvedIp ?: ""})")
-                appendLine("Chế độ: ${_mode.value.displayName}")
-                appendLine("Độ đồng thời: ${state.concurrencyUsed} | Timeout: ${state.timeoutUsedMs}ms")
-                appendLine("Tổng cổng đã quét: ${state.scannedCount}/${state.totalCount}")
-                appendLine("Thống kê: Mở: ${state.openPorts.size} | Đóng: ${state.closedCount} | Bị chặn/Timeout: ${state.filteredCount}")
-                appendLine("\nDanh sách cổng mở:")
+                appendLine("Target: ${state.target} (${state.resolvedIp ?: ""})")
+                appendLine("Mode: ${_mode.value.displayName}")
+                appendLine("Concurrency: ${state.concurrencyUsed} | Timeout: ${state.timeoutUsedMs}ms")
+                appendLine("Scanned ports: ${state.scannedCount}/${state.totalCount}")
+                appendLine("Stats: Open: ${state.openPorts.size} | Closed: ${state.closedCount} | Filtered: ${state.filteredCount}")
+                appendLine("\nOpen ports:")
                 state.openPorts.forEach { p ->
-                    appendLine("• Cổng ${p.port} (${p.serviceName}) - ${p.responseTimeMs ?: 0}ms ${if (p.banner != null) "[Banner: ${p.banner}]" else ""}")
+                    appendLine("• Port ${p.port} (${p.serviceName}) - ${p.responseTimeMs ?: 0}ms ${if (p.banner != null) "[Banner: ${p.banner}]" else ""}")
                 }
             }
 

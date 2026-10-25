@@ -3,12 +3,14 @@ package com.networkanalyst.app.ui.screens.whois
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.networkanalyst.app.R
 import com.networkanalyst.app.data.local.HistoryDao
 import com.networkanalyst.app.data.local.entity.HistoryEntity
 import com.networkanalyst.app.data.model.ToolType
 import com.networkanalyst.app.data.model.WhoisResult
 import com.networkanalyst.app.data.service.AdService
 import com.networkanalyst.app.data.service.WhoisRdapService
+import com.networkanalyst.app.ui.components.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +23,7 @@ data class WhoisUiState(
     val target: String = "google.com",
     val result: WhoisResult? = null,
     val selectedTab: Int = 0, // 0 = Summary, 1 = Raw
-    val errorMessage: String? = null
+    val error: UiText? = null
 )
 
 @HiltViewModel
@@ -45,12 +47,12 @@ class WhoisViewModel @Inject constructor(
     fun queryWhois(activity: Activity? = null) {
         val target = _uiState.value.target.trim()
         if (target.isEmpty()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Vui lòng nhập tên miền, địa chỉ IP hoặc ASN hợp lệ.")
+            _uiState.value = _uiState.value.copy(error = UiText.StringResource(R.string.err_whois_invalid_target))
             return
         }
 
         adService.recordToolAction(activity)
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
         viewModelScope.launch {
             try {
@@ -58,12 +60,12 @@ class WhoisViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     result = res,
-                    errorMessage = null
+                    error = null
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = "Lỗi khi tra cứu: ${e.localizedMessage}"
+                    error = UiText.StringResource(R.string.err_generic_service_error, "Whois", e.localizedMessage ?: "")
                 )
             }
         }
@@ -75,23 +77,23 @@ class WhoisViewModel @Inject constructor(
             val summary = res.summary
             val summaryText = buildString {
                 append("Whois ${res.target}: ")
-                if (!summary.entityName.isNullOrEmpty()) append("Chủ sở hữu: ${summary.entityName} | ")
+                if (!summary.entityName.isNullOrEmpty()) append("Owner: ${summary.entityName} | ")
                 if (!summary.registrar.isNullOrEmpty()) append("Registrar: ${summary.registrar} | ")
-                append("Nguồn: ${res.source.name}")
+                append("Source: ${res.source.name}")
             }
 
             val details = buildString {
-                appendLine("Mục tiêu: ${res.target}")
-                appendLine("Loại: ${res.queryType.name} | Nguồn: ${res.source.name} | Thời gian: ${res.queryTimeMs}ms")
-                if (!summary.entityName.isNullOrEmpty()) appendLine("Chủ sở hữu/Thực thể: ${summary.entityName}")
-                if (!summary.registrar.isNullOrEmpty()) appendLine("Nhà đăng ký (Registrar): ${summary.registrar}")
-                if (!summary.createdDate.isNullOrEmpty()) appendLine("Ngày tạo: ${summary.createdDate}")
-                if (!summary.expiresDate.isNullOrEmpty()) appendLine("Ngày hết hạn: ${summary.expiresDate}")
-                if (!summary.updatedDate.isNullOrEmpty()) appendLine("Ngày cập nhật: ${summary.updatedDate}")
-                if (summary.statuses.isNotEmpty()) appendLine("Trạng thái: ${summary.statuses.joinToString(", ")}")
+                appendLine("Target: ${res.target}")
+                appendLine("Type: ${res.queryType.name} | Source: ${res.source.name} | Response Time: ${res.queryTimeMs}ms")
+                if (!summary.entityName.isNullOrEmpty()) appendLine("Owner/Entity: ${summary.entityName}")
+                if (!summary.registrar.isNullOrEmpty()) appendLine("Registrar: ${summary.registrar}")
+                if (!summary.createdDate.isNullOrEmpty()) appendLine("Created: ${summary.createdDate}")
+                if (!summary.expiresDate.isNullOrEmpty()) appendLine("Expires: ${summary.expiresDate}")
+                if (!summary.updatedDate.isNullOrEmpty()) appendLine("Updated: ${summary.updatedDate}")
+                if (summary.statuses.isNotEmpty()) appendLine("Status: ${summary.statuses.joinToString(", ")}")
                 if (!summary.cidr.isNullOrEmpty()) appendLine("CIDR: ${summary.cidr}")
                 if (summary.nameservers.isNotEmpty()) appendLine("Nameservers: ${summary.nameservers.joinToString(", ")}")
-                if (!summary.contactEmail.isNullOrEmpty()) appendLine("Email liên hệ: ${summary.contactEmail}")
+                if (!summary.contactEmail.isNullOrEmpty()) appendLine("Contact: ${summary.contactEmail}")
                 if (!summary.asnNumber.isNullOrEmpty()) appendLine("ASN: ${summary.asnNumber} (${summary.asnName ?: ""})")
             }
 

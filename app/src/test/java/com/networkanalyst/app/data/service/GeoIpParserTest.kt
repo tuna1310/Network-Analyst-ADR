@@ -45,7 +45,7 @@ class GeoIpParserTest {
         val info = GeoIpParser.parseResponse("10.0.0.1", sampleJson)
 
         assertEquals("10.0.0.1", info.ip)
-        assertEquals("Không rõ", info.country)
+        assertNull(info.country)
         assertNull(info.countryCode)
     }
 
@@ -54,6 +54,6 @@ class GeoIpParserTest {
         val info = GeoIpParser.parseResponse("1.1.1.1", "invalid json response")
 
         assertEquals("1.1.1.1", info.ip)
-        assertEquals("Không rõ", info.country)
+        assertNull(info.country)
     }
 }

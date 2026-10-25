@@ -26,6 +26,11 @@
 - **Quyền runtime kèm màn hình giải thích (Rationale Dialog)**:
   - `ACCESS_FINE_LOCATION`: Bắt buộc từ Android 8.0+ để lấy tên mạng Wi-Fi (`SSID`) và địa chỉ `BSSID`. Ứng dụng giải thích rõ ràng cho người dùng rằng quyền này chỉ để đọc thông tin mạng, không theo dõi định vị vật lý.
   - `NEARBY_WIFI_DEVICES`: Bắt buộc trên **Android 13+ (API 33+)** với cờ `neverForLocation` để quét thiết bị lân cận mà không cần định vị vị trí.
+  - `READ_PHONE_STATE`: **Chỉ yêu cầu theo ngữ cảnh (On-Demand)** khi người dùng chủ động mở mục xem chi tiết SIM / Nhà mạng di động.
+    > [!NOTE]
+    > **Ràng buộc bảo mật & chống fingerprinting của Android**:
+    > Việc truy xuất thế hệ mạng di động chi tiết (4G LTE / 5G NR) qua `TelephonyManager.getDataNetworkType()` và danh sách thẻ SIM qua `SubscriptionManager.getActiveSubscriptionInfoList()` yêu cầu quyền `READ_PHONE_STATE` (xem tài liệu Android về TelephonyManager) để ngăn chặn việc thu thập định danh phần cứng (device fingerprinting).
+    > **Cơ chế Fallback mềm dẻo**: Ứng dụng không bao giờ ép người dùng cấp quyền này khi khởi động. Nếu người dùng từ chối, ứng dụng vẫn hoạt động 100% bình thường trên mọi công cụ (LAN Scan, Port Scan, Ping, Traceroute, DNS, Whois) và hiển thị thông tin mạng di động ở mức tổng quát (`TRANSPORT_CELLULAR` - "Mobile Data") qua `NetworkCapabilities` công khai mà không gây crash hay gián đoạn trải nghiệm.
 
 ### 2. Dò tìm thiết bị LAN không dựa vào `/proc/net/arp`
 - Trên Android 10+ (API 29+), hệ điều hành đã chặn quyền truy cập vào `/proc/net/arp`.
@@ -35,14 +40,18 @@
   3. **UDP NetBIOS Name Service (Port 137)**: Gửi gói tin RFC 1002 NBSTAT wildcard query tới từng IP. Khi thiết bị phản hồi, ứng dụng trích xuất được **Computer Name** (Windows / Samba / NAS) và **địa chỉ MAC card mạng thật** của thiết bị.
   4. **UDP LLMNR (Port 5355)**: Gửi truy vấn Link-Local Multicast Name Resolution phân giải hostname nội bộ.
   5. **UDP SNMP (Port 161)**: Thăm dò SNMP v1/v2c OID `1.3.6.1.2.1.1.1.0` (sysDescr) với community `public` để nhận dạng các thiết bị mạng chuyên dụng (Cisco, MikroTik, Synology NAS, máy in HP, Canon, Epson).
-  6. **Nhận dạng nhà sản xuất (Vendor Heuristic)**: Phân tích OUI prefix từ MAC và đối chiếu mẫu hostname để gán nhãn thiết bị (Apple, Samsung, Google Cast, Raspberry Pi, TP-Link, Windows PC, Linux Server).
+  6. **Cơ sở dữ liệu OUI & Nhận dạng Nhà sản xuất (IEEE Standards)**:
+     - **Nguồn gốc dữ liệu**: Hiện tại tệp `app/src/main/res/raw/oui_database.txt` là **DỮ LIỆU MẪU, 207 hãng** (chứa các hãng thiết bị phổ biến như Cisco, Apple, Espressif, Intel, Samsung, TP-Link, Realtek, Raspberry Pi...). Để có CSDL hoàn chỉnh 35.000+ hãng, người dùng tự tải tệp `oui.csv` từ IEEE đặt vào `scripts/data/oui.csv` và chạy script `scripts/generate_oui_data.py`. Script hỗ trợ trích xuất toàn diện cả 3 khối chuẩn IEEE: **MA-L** (24-bit OUI - 6 ký tự hex), **MA-M** (28-bit OUI - 7 ký tự hex), và **MA-S** (36-bit OUI - 9 ký tự hex), xử lý chính xác các trường CSV có dấu phẩy và dấu ngoặc kép.
+     - **Phát hiện địa chỉ MAC ngẫu nhiên (Locally Administered MAC)**: Theo tiêu chuẩn IEEE 802, bit thứ 2 của byte đầu tiên (`b1` của byte 0, tương ứng `firstByte & 0x02 != 0`) đánh dấu địa chỉ MAC được quản lý cục bộ hoặc ngẫu nhiên hóa (Private/Random MAC) - tính năng mặc định trên Android 10+, iOS 14+ và Windows 10/11. Ứng dụng tự động phát hiện cờ này và hiển thị nhãn `"Private / Random MAC"`, tuyệt đối không gán nhãn sai cho bất kỳ nhà sản xuất nào.
+     - **Chuẩn hóa MAC Address linh hoạt (`OuiLookupHelper`)**: Hỗ trợ chuẩn hóa mọi định dạng MAC phổ biến (`AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, định dạng không dấu phân cách `AABBCCDDEEFF`, hoặc chữ hoa/chữ thường) trước khi tra cứu tiền tố OUI với độ ưu tiên giảm dần: MA-S (9 hex) -> MA-M (7 hex) -> MA-L (6 hex).
+     - **Đối chiếu mẫu dịch vụ**: Kết hợp hostname mDNS/NetBIOS để định danh chính xác thiết bị (Apple, Samsung, Google Cast, Raspberry Pi, TP-Link, Windows PC, Linux Server).
 
 ### 3. Công cụ Ping độ tin cậy cao
 - Hỗ trợ cả 2 cơ chế:
   - **Lệnh ping hệ thống qua `ProcessBuilder` (Ưu tiên)**: Gọi trực tiếp `/system/bin/ping` với các tham số `-c <count> -W <timeoutSec> <target>`.
     > [!NOTE]
     > **Thực tế về lệnh ping trên Android**: Các ứng dụng Android thông thường hoàn toàn có thể thực thi `/system/bin/ping` mà không cần quyền root. Thách thức kỹ thuật thực sự nằm ở việc các nhà sản xuất thiết bị (OEM như Samsung, Xiaomi, Google Pixel) sử dụng các bản dựng binary khác nhau (toybox, iputils, bản tùy biến riêng của hãng) dẫn đến sự khác biệt về cờ tham số (ví dụ `-t` vs `-m`) và định dạng chuỗi đầu ra.
-    > Ứng dụng đã giải quyết vấn đề này bằng bộ phân tích `PingOutputParser` đa biến thể trích xuất linh hoạt dữ liệu từng gói tin (`bytes`, `seq`, `ttl`, `time ms`, `time<1 ms`) và bảng thống kê truyền/nhận, tỷ lệ mất gói (`% packet loss`), độ trễ `min/avg/max/mdev`. Hỗ trợ bọc `withTimeoutOrNull` và `destroyForcibly()` chống treo process.
+    > Ứng dụng xử lý bằng bộ phân tích `PingOutputParser` đa biến thể trích xuất linh hoạt dữ liệu từng gói tin (`bytes`, `seq`, `ttl`, `time ms`, `time<1 ms`) và bảng thống kê truyền/nhận, tỷ lệ mất gói (`% packet loss`), độ trễ `min/avg/max/mdev`. Hỗ trợ bọc `withTimeoutOrNull` và `destroyForcibly()` chống treo process. *(Lưu ý: Các mẫu kiểm thử trong bộ unit test là fixture tự soạn theo định dạng chuẩn của iputils và toybox, chưa được kiểm chứng thực tế trên từng thiết bị phần cứng của các hãng máy).*
   - **`InetAddress.isReachable(timeout)` (Dự phòng cuối cùng)**:
     > [!IMPORTANT]
     > **Lưu ý kỹ thuật về `InetAddress.isReachable` trên Android**:
@@ -51,7 +60,7 @@
 ### 4. Công cụ Traceroute với TTL tăng dần & Tùy chọn GeoIP
 - Sử dụng tiện ích ping hệ điều hành với cờ `-t <ttl>`, tăng dần TTL từ `1` đến `30`.
 - Bắt gói tin ICMP `Time to live exceeded` qua `TracerouteOutputParser` để xác định địa chỉ IP và độ trễ tại từng router trung gian.
-- **Tương thích nhà sản xuất (OEM)**: Tự động phát hiện nếu binary ping trên thiết bị (Samsung, Xiaomi, Pixel, toybox) không hỗ trợ cờ `-t` và báo lỗi rõ ràng thay vì hiện toàn bộ hop timeout.
+- **Tương thích định dạng binary ping**: Tự động phát hiện nếu binary ping trên thiết bị không hỗ trợ cờ `-t` và báo lỗi rõ ràng thay vì hiện toàn bộ hop timeout. *(Các bộ test fixture được soạn theo quy cách iputils/toybox chuẩn)*.
 - Bọc timeout cho từng hop và gọi `process.destroyForcibly()` khi dừng hoặc timeout, tránh rò rỉ tiến trình chạy ngầm.
 - **Tùy chọn hiển thị quốc gia từng hop (GeoIP)**:
   - Công tắc "Hiện quốc gia của từng hop" (Mặc định: **TẮT**), kèm thông báo giải thích IP sẽ được gửi tới dịch vụ bên thứ ba.
@@ -120,22 +129,35 @@
 
 ---
 
-## 📋 Lộ trình các tính năng tiếp theo (Mốc 3)
-Các tính năng sau đã được quy hoạch hoàn thiện trong Mốc 3:
-1. **Hỗ trợ IPv6 toàn diện**: Hiển thị địa chỉ IPv6 trong Quét LAN (qua mDNS/NsdManager); hỗ trợ đích đến IPv6 cho Ping và Traceroute; hiển thị cả IPv4 và IPv6 cho Internet công cộng.
-2. **Reverse DNS (PTR) cho LAN Scanner**: Bổ sung cơ chế tra cứu PTR record phân giải hostname cho các thiết bị LAN sau mDNS và NetBIOS.
-3. **Chi tiết kết nối mạng nâng cao**:
-   - Nhận diện chuẩn bảo mật Wi-Fi: WPA, WPA2, WPA3, Open (WPA3-SAE, WPA2-PSK).
-   - Loại mạng di động thế hệ mới (4G LTE / 5G SA / 5G NSA) và thông tin cấu hình SIM qua `SubscriptionManager` (kèm xin quyền `READ_PHONE_STATE` với màn hình giải thích minh bạch).
-   - Nhận diện kết nối mạng qua cổng chuyển đổi USB Ethernet (`NetworkCapabilities.TRANSPORT_ETHERNET`).
-4. **DNS Đa truy vấn**: Tùy chọn truy vấn đồng thời tất cả các loại bản ghi DNS (`ANY` / batch query).
-5. **Rà soát quyền riêng tư (Privacy Audit)**: Liệt kê chi tiết mọi endpoint bên ngoài (ipify, ipwho.is, IANA, rdap.org, DNS Resolvers), đảm bảo 100% sử dụng HTTPS và rà soát triệt để mọi chuỗi ký tự trên UI qua `strings.xml`.
+## 🔒 Bảng rà soát Quyền riêng tư & Các điểm cuối bên ngoài (Privacy Audit)
+
+Ứng dụng tuân thủ nghiêm ngặt chính sách bảo mật: Toàn bộ kết nối gọi ra bên ngoài đều được mã hóa HTTPS (ngoại trừ Whois cổng 43 chuẩn TCP và DNS UDP/TCP theo thiết kế giao thức). Các truy vấn cục bộ nội bộ LAN (mDNS, NetBIOS, SNMP, ICMP) **hoàn toàn không gửi bất kỳ dữ liệu nào ra Internet**.
+
+| Điểm cuối (Endpoint) | Giao thức | Mục đích | Kích hoạt khi nào | Gửi IP người dùng? |
+| :--- | :--- | :--- | :--- | :--- |
+| `https://api4.ipify.org` | HTTPS | Lấy địa chỉ Public IPv4 của thiết bị | Tự động khi mở tab Thông tin mạng hoặc nhấn Làm mới | Chỉ IP nguồn kết nối TCP tự nhiên, không kèm dữ liệu |
+| `https://api6.ipify.org` | HTTPS | Lấy địa chỉ Public IPv6 của thiết bị | Tự động khi mở tab Thông tin mạng hoặc nhấn Làm mới | Chỉ IP nguồn kết nối TCP tự nhiên, không kèm dữ liệu |
+| `https://ipv4.icanhazip.com` | HTTPS | Dự phòng lấy Public IPv4 khi ipify lỗi | Tự động khi ipify không phản hồi | Chỉ IP nguồn kết nối TCP tự nhiên |
+| `https://ipwho.is/{ip}` | HTTPS | 1. Tra cứu ISP và Quốc gia cho Public IP<br>2. Tra cứu quốc gia từng hop Traceroute | 1. Khi mở tab Thông tin mạng<br>2. **Chỉ khi người dùng BẬT công tắc "Hiện quốc gia từng hop"** | Có gửi địa chỉ IP hop cần tra cứu (tuyệt đối không gửi IP Private/LAN) |
+| `https://data.iana.org/rdap/*` | HTTPS | Tải bảng Bootstrap RDAP tĩnh (dns, ipv4, ipv6, asn) | Khi người dùng nhấn tra cứu Whois/RDAP (có cache 24h) | Không (chỉ tải tệp tĩnh, không truyền dữ liệu người dùng) |
+| `https://rdap.org/*` | HTTPS | Cổng dự phòng truy vấn RDAP khi IANA không có URL | Khi người dùng nhấn tra cứu Whois/RDAP | Gửi domain/IP/ASN mà người dùng chủ động tìm kiếm |
+| `whois.iana.org:43` & referral servers | TCP 43 | Fallback truy vấn Whois truyền thống | Khi người dùng tra cứu Whois và RDAP thất bại | Gửi chuỗi query domain/IP mà người dùng nhập |
+| Các máy chủ DNS (1.1.1.1, 8.8.8.8, 9.9.9.9...) | UDP / TCP 53 | Phân giải bản ghi DNS theo yêu cầu | Chỉ khi người dùng bấm nút "Tra cứu DNS" | Gửi tên miền cần tra cứu tới resolver được chọn |
+
+> [!NOTE]
+> **Quy định bảo mật mạng (Network Security Config)**:
+> Tệp `app/src/main/res/xml/network_security_config.xml` áp đặt cấm toàn bộ lưu lượng văn bản thuần (`cleartextTrafficPermitted="false"`), bảo vệ ứng dụng khỏi nguy cơ vô tình gửi dữ liệu qua HTTP không mã hóa.
 
 ---
 
 ## 📢 Hướng dẫn tích hợp Google AdMob (Thay thế MockAdService)
 
-Hiện tại, ứng dụng sử dụng `MockAdServiceImpl` để mô phỏng hiển thị banner và interstitial mà không phụ thuộc vào Internet ID của Google.
+Hiện tại, ứng dụng sử dụng `MockAdServiceImpl` để mô phỏng hiển thị banner và interstitial mà không phụ thuộc vào AdMob ID thật.
+
+> [!IMPORTANT]
+> **Yêu cầu tuân thủ khi gắn AdMob thật**:
+> 1. **Màn hình đồng ý người dùng (User Messaging Platform - UMP SDK)**: Bắt buộc tích hợp Google UMP SDK (`com.google.android.ump:user-messaging-platform`) để thu thập sự đồng ý (Consent) của người dùng tại các khu vực châu Âu (GDPR) và Vương quốc Anh trước khi nạp quảng cáo.
+> 2. **Khai báo An toàn dữ liệu (Google Play Data Safety)**: Khi gắn AdMob SDK thật, nhà phát triển bắt buộc phải khai báo trong Google Play Console về việc thu thập Advertising ID (AAID), Device ID và tương tác ứng dụng cho mục đích quảng cáo/phân tích.
 
 Để kết nối Google AdMob thật:
 
@@ -252,6 +274,8 @@ Kết quả kiểm tra lint: **Hoàn toàn sạch sẽ, không có bất kỳ l�
 
 ## 📂 Cấu trúc thư mục mã nguồn
 ```
+scripts/
+└── generate_oui_data.py                 # Script trích xuất OUI MA-L/M/S từ oui.csv của IEEE
 app/src/main/
 ├── AndroidManifest.xml
 ├── java/com/networkanalyst/app/
@@ -266,12 +290,17 @@ app/src/main/
 │   │   └── service/
 │   │       ├── AdService.kt             # Interface quảng cáo & MockAdServiceImpl
 │   │       ├── DiagnosticsHelper.kt
-│   │       ├── NetworkDiagnosticsService.kt  # ConnectivityManager, Wi-Fi, IP, Gateway, DNS, VPN
-│   │       ├── LanScannerService.kt     # Quét LAN: TCP probe + mDNS + NetBIOS UDP + SNMP
-│   │       ├── PingService.kt           # Ping: InetAddress.isReachable + ProcessBuilder
-│   │       ├── TracerouteService.kt     # Traceroute tăng dần TTL
+│   │       ├── GeoIpService.kt          # Dịch vụ tra cứu GeoIP cho hop traceroute / public IP
+│   │       ├── HostnameResolutionHelper.kt # Thứ tự ưu tiên phân giải hostname: mDNS > NetBIOS > LLMNR > PTR
+│   │       ├── NetworkClassifierHelper.kt  # Phân loại chuẩn Wi-Fi (WPA/WPA2/WPA3) & thế hệ di động (4G/5G)
+│   │       ├── NetworkDiagnosticsService.kt  # ConnectivityManager, Wi-Fi, IP, Gateway, DNS, VPN, Ethernet
+│   │       ├── OuiLookupHelper.kt       # Tra cứu OUI chuẩn hóa, MA-L/M/S, phát hiện MAC ngẫu nhiên
+│   │       ├── LanScannerService.kt     # Quét LAN: TCP probe + mDNS + NetBIOS UDP + SNMP + OUI lookup
+│   │       ├── PingService.kt           # Ping: InetAddress.isReachable + ProcessBuilder + PingOutputParser
+│   │       ├── TracerouteService.kt     # Traceroute tăng dần TTL + TracerouteOutputParser
 │   │       ├── PortScannerService.kt    # Quét cổng với Semaphore + Banner Grabbing
-│   │       └── DnsService.kt            # DNS lookup dùng dnsjava + resolver tùy chọn
+│   │       ├── DnsService.kt            # DNS lookup dùng dnsjava + resolver tùy chọn
+│   │       └── WhoisRdapService.kt      # Tra cứu RDAP (IANA Bootstrap) & Whois TCP 43 fallback
 │   ├── di/
 │   │   └── AppModule.kt                 # Cấu hình Dagger Hilt
 │   └── ui/
@@ -284,11 +313,34 @@ app/src/main/
 │       │   ├── traceroute/              # Màn hình Traceroute
 │       │   ├── portscan/                # Màn hình Quét cổng
 │       │   ├── dns/                     # Màn hình Tra cứu DNS
+│       │   ├── whois/                   # Màn hình Tra cứu Whois/RDAP
 │       │   └── history/                 # Màn hình Lịch sử Room
 │       └── theme/                       # Material 3 Theme, Typography, Colors
 └── res/
-    ├── drawable/
-    ├── mipmap-anydpi-v26/
+    ├── raw/
+    │   └── oui_database.txt             # Cơ sở dữ liệu OUI (Dữ liệu mẫu 207 hãng)
     ├── values/
+    │   └── strings.xml                  # Ngôn ngữ mặc định (English)
+    ├── values-vi/
+    │   └── strings.xml                  # Bản địa hóa Tiếng Việt (100% khớp khóa)
     └── xml/
 ```
+
+---
+
+## 📋 Danh sách các việc cần thực hiện thủ công trước khi phát hành (Manual Checklist)
+
+1. **Cập nhật Cơ sở dữ liệu OUI IEEE đầy đủ**:
+   - Tải tệp `oui.csv` chính thức mới nhất từ IEEE Standards Association (hơn 35.000+ hãng).
+   - Đặt tệp vào thư mục `scripts/data/oui.csv`.
+   - Chạy lệnh: `python scripts/generate_oui_data.py` để sinh ra `app/src/main/res/raw/oui_database.txt` hoàn chỉnh (thay thế tệp dữ liệu mẫu 207 hãng).
+2. **Tùy biến Nhận diện Ứng dụng (Branding & Assets)**:
+   - Thay đổi tên ứng dụng trong `app/src/main/res/values/strings.xml` (`app_name`) nếu cần.
+   - Thay thế biểu tượng launcher (`ic_launcher`, `ic_launcher_round`, adaptive icon vector) trong thư mục `app/src/main/res/mipmap-*`.
+3. **Ký số bản dựng Release (Signing Config)**:
+   - Tạo Java Keystore (`.jks` / `.keystore`) bằng `keytool` hoặc Android Studio.
+   - Cấu hình biến môi trường hoặc `signingConfigs.release` trong `app/build.gradle.kts` (không lưu mật khẩu keystore trực tiếp vào git).
+   - Chạy lệnh `./gradlew assembleRelease` hoặc `./gradlew bundleRelease` (AAB) để ký release.
+4. **Khai báo trên Google Play Console**:
+   - **Khai báo An toàn dữ liệu (Data Safety Form)**: Khai báo không thu thập hoặc chia sẻ dữ liệu vị trí vật lý; giải thích các kết nối HTTP tới các điểm cuối tra cứu địa chỉ IP công cộng (ipify, icanhazip, ipwho.is) và WHOIS/RDAP.
+   - **Khai báo Quyền nhạy cảm (Permissions Declaration)**: Khai báo lý do sử dụng quyền `READ_PHONE_STATE` (chỉ dùng để hiển thị thế hệ mạng 4G/5G và nhà mạng SIM khi người dùng chủ động xem trong mục SIM Info; ứng dụng vẫn hoạt động đầy đủ khi người dùng từ chối cấp quyền).

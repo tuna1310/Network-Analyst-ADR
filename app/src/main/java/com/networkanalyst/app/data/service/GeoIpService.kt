@@ -21,7 +21,7 @@ object GeoIpParser {
             val json = JSONObject(jsonString)
             val success = json.optBoolean("success", true)
             if (!success) {
-                GeoIpInfo(ip = ip, country = "Không rõ")
+                GeoIpInfo(ip = ip, country = null)
             } else {
                 val country = json.optString("country", "").ifEmpty { null }
                 val countryCode = json.optString("country_code", "").ifEmpty { null }
@@ -30,14 +30,14 @@ object GeoIpParser {
                 val isp = connection?.optString("isp", "")?.ifEmpty { null }
                 GeoIpInfo(
                     ip = ip,
-                    country = country ?: "Không rõ",
+                    country = country,
                     countryCode = countryCode,
                     city = city,
                     isp = isp
                 )
             }
         } catch (_: Exception) {
-            GeoIpInfo(ip = ip, country = "Không rõ")
+            GeoIpInfo(ip = ip, country = null)
         }
     }
 }
@@ -84,7 +84,7 @@ class GeoIpService @Inject constructor() {
 
         // 3. Giới hạn số lượng truy vấn mỗi phiên
         if (sessionRequestCount >= MAX_SESSION_REQUESTS) {
-            return@withContext GeoIpInfo(ip = cleanIp, country = "Không rõ")
+            return@withContext GeoIpInfo(ip = cleanIp, country = "Unknown")
         }
 
         requestMutex.withLock {
@@ -119,12 +119,12 @@ class GeoIpService @Inject constructor() {
                     cache[cleanIp] = info
                     return@withContext info
                 } else {
-                    val fallback = GeoIpInfo(ip = cleanIp, country = "Không rõ")
+                    val fallback = GeoIpInfo(ip = cleanIp, country = "Unknown")
                     cache[cleanIp] = fallback
                     return@withContext fallback
                 }
             } catch (_: Exception) {
-                val fallback = GeoIpInfo(ip = cleanIp, country = "Không rõ")
+                val fallback = GeoIpInfo(ip = cleanIp, country = "Unknown")
                 cache[cleanIp] = fallback
                 return@withContext fallback
             } finally {

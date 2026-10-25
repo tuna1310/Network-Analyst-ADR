@@ -6,6 +6,7 @@ import android.provider.Settings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -14,6 +15,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.networkanalyst.app.R
 
 @Composable
 fun PermissionRationaleDialog(
@@ -24,22 +27,21 @@ fun PermissionRationaleDialog(
     val context = LocalContext.current
 
     val title = when (permissionType) {
-        PermissionType.LOCATION_FOR_WIFI -> "Yêu cầu quyền Vị trí chính xác"
-        PermissionType.NEARBY_DEVICES -> "Yêu cầu quyền Thiết bị lân cận"
+        PermissionType.LOCATION_FOR_WIFI -> stringResource(R.string.perm_location_title)
+        PermissionType.NEARBY_DEVICES -> stringResource(R.string.perm_nearby_title)
+        PermissionType.READ_PHONE_STATE -> stringResource(R.string.perm_phone_state_title)
     }
 
     val description = when (permissionType) {
-        PermissionType.LOCATION_FOR_WIFI ->
-            "Từ Android 8.0 trở lên, hệ điều hành Android bắt buộc quyền Vị trí (ACCESS_FINE_LOCATION) để đọc được tên mạng Wi-Fi (SSID) và địa chỉ BSSID của router.\n\n" +
-            "Ứng dụng Network Analyst hoàn toàn KHÔNG theo dõi hoặc gửi vị trí thực của bạn ra ngoài."
-
-        PermissionType.NEARBY_DEVICES ->
-            "Trên Android 13 trở lên, quyền Thiết bị Wi-Fi lân cận (NEARBY_WIFI_DEVICES) cho phép ứng dụng khám phá và hiển thị các thiết bị cùng mạng Wi-Fi qua giao thức mDNS/multicast."
+        PermissionType.LOCATION_FOR_WIFI -> stringResource(R.string.perm_location_desc)
+        PermissionType.NEARBY_DEVICES -> stringResource(R.string.perm_nearby_desc)
+        PermissionType.READ_PHONE_STATE -> stringResource(R.string.perm_phone_state_desc)
     }
 
     val icon = when (permissionType) {
         PermissionType.LOCATION_FOR_WIFI -> Icons.Default.LocationOn
         PermissionType.NEARBY_DEVICES -> Icons.Default.Wifi
+        PermissionType.READ_PHONE_STATE -> Icons.Default.PhoneAndroid
     }
 
     AlertDialog(
@@ -52,7 +54,7 @@ fun PermissionRationaleDialog(
                 onDismiss()
                 onRequestPermission()
             }) {
-                Text("Cấp quyền")
+                Text(stringResource(R.string.perm_btn_grant))
             }
         },
         dismissButton = {
@@ -65,7 +67,7 @@ fun PermissionRationaleDialog(
                     context.startActivity(intent)
                 } catch (_: Exception) {}
             }) {
-                Text("Mở Cài đặt")
+                Text(stringResource(R.string.perm_btn_settings))
             }
         }
     )
@@ -73,5 +75,6 @@ fun PermissionRationaleDialog(
 
 enum class PermissionType {
     LOCATION_FOR_WIFI,
-    NEARBY_DEVICES
+    NEARBY_DEVICES,
+    READ_PHONE_STATE
 }
