@@ -40,6 +40,7 @@ import com.networkanalyst.app.ui.screens.ping.PingScreen
 import com.networkanalyst.app.ui.screens.ping.PingViewModel
 import com.networkanalyst.app.ui.screens.portscan.PortScanScreen
 import com.networkanalyst.app.ui.screens.portscan.PortScanViewModel
+import com.networkanalyst.app.ui.screens.tools.ToolsScreen
 import com.networkanalyst.app.ui.screens.traceroute.TracerouteScreen
 import com.networkanalyst.app.ui.screens.traceroute.TracerouteViewModel
 import com.networkanalyst.app.ui.screens.whois.WhoisScreen
@@ -94,14 +95,14 @@ fun MainAppNavigation() {
                         icon = {
                             Icon(
                                 screen.icon,
-                                contentDescription = stringResource(screen.titleRes)
+                                contentDescription = screen.label
                             )
                         },
                         label = {
                             Text(
-                                text = stringResource(screen.titleRes),
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                text = screen.label,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1
                             )
                         },
@@ -127,6 +128,9 @@ fun MainAppNavigation() {
             composable(Screen.LanScan.route) {
                 val vm = hiltViewModel<LanScanViewModel>()
                 LanScanScreen(viewModel = vm)
+            }
+            composable(Screen.Tools.route) {
+                ToolsScreen()
             }
             composable(Screen.Ping.route) {
                 val vm = hiltViewModel<PingViewModel>()
