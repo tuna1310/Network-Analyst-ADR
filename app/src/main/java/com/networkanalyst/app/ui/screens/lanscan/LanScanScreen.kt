@@ -133,12 +133,15 @@ fun LanScanScreen(
             AdBannerComposable(adService = viewModel.adService)
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             // Control Card
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -263,32 +266,31 @@ fun LanScanScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
             // Discovered devices
             if (progress.devices.isEmpty() && !progress.isScanning) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.lanscan_empty_prompt),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.lanscan_empty_prompt),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(progress.devices, key = { it.ip }) { device ->
-                        LanDeviceCard(device = device)
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+                items(progress.devices, key = { it.ip }) { device ->
+                    LanDeviceCard(device = device)
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

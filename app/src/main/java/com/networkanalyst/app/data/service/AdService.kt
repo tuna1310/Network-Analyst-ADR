@@ -32,7 +32,7 @@ interface AdService {
 class MockAdServiceImpl @Inject constructor() : AdService {
     private val tag = "MockAdService"
 
-    private val _isBannerEnabled = MutableStateFlow(true)
+    private val _isBannerEnabled = MutableStateFlow(false)
     override val isBannerEnabled: StateFlow<Boolean> = _isBannerEnabled.asStateFlow()
 
     private val _interstitialSimulatedCount = MutableStateFlow(0)

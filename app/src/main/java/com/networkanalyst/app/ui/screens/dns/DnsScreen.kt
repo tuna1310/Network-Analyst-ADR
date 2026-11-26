@@ -111,12 +111,15 @@ fun DnsScreen(
             AdBannerComposable(adService = viewModel.adService)
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -269,31 +272,30 @@ fun DnsScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
             if (state.results.isEmpty() && !state.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.dns_empty_prompt),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dns_empty_prompt),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(state.results) { record ->
-                        DnsRecordRow(record = record)
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+                items(state.results) { record ->
+                    DnsRecordRow(record = record)
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

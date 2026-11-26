@@ -130,12 +130,15 @@ fun PortScanScreen(
             AdBannerComposable(adService = viewModel.adService)
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -373,31 +376,30 @@ fun PortScanScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
             if (state.openPorts.isEmpty() && !state.isScanning && !state.isPaused) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (state.scannedCount > 0) stringResource(R.string.portscan_empty_open) else stringResource(R.string.portscan_status_idle),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (state.scannedCount > 0) stringResource(R.string.portscan_empty_open) else stringResource(R.string.portscan_status_idle),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(state.openPorts, key = { it.port }) { item ->
-                        PortRow(item = item)
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+                items(state.openPorts, key = { it.port }) { item ->
+                    PortRow(item = item)
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

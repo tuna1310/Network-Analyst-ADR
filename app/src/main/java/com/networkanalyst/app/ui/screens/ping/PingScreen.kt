@@ -105,12 +105,15 @@ fun PingScreen(
             AdBannerComposable(adService = viewModel.adService)
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             // Target Input Card
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -229,17 +232,14 @@ fun PingScreen(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(state.packets, key = { it.sequence }) { packet ->
-                    PingPacketRow(packet = packet)
-                }
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+            items(state.packets, key = { it.sequence }) { packet ->
+                PingPacketRow(packet = packet)
+            }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

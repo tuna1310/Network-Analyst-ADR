@@ -110,12 +110,15 @@ fun TracerouteScreen(
             AdBannerComposable(adService = viewModel.adService)
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -261,27 +264,24 @@ fun TracerouteScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(state.hops, key = { it.hop }) { hop ->
-                    TracerouteHopRow(hop = hop)
-                }
-                if (enableGeoIp && state.hops.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.traceroute_geoip_source),
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
-                }
+            items(state.hops, key = { it.hop }) { hop ->
+                TracerouteHopRow(hop = hop)
+            }
+            if (enableGeoIp && state.hops.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.traceroute_geoip_source),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
                 }
+            }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
