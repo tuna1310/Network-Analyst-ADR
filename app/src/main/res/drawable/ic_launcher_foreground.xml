@@ -4,28 +4,32 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Gift box base -->
+    <!-- Subtle teal radar ring inside adaptive icon safe zone -->
     <path
-        android:fillColor="#C8912B"
-        android:pathData="M34,46h40v34h-40z" />
-    <!-- Gift box lid -->
+        android:pathData="M23,55 a31,31 0 1,0 62,0 a31,31 0 1,0 -62,0"
+        android:strokeAlpha="0.4"
+        android:strokeColor="#2DD4BF"
+        android:strokeWidth="1.6" />
+    <!-- Outer Wi-Fi signal arc -->
     <path
-        android:fillColor="#E0AE4D"
-        android:pathData="M31,38h46v8h-46z" />
-    <!-- Vertical ribbon -->
+        android:pathData="M36.68,49.68 A24.5,24.5 0 0,1 71.32,49.68"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.4" />
+    <!-- Middle Wi-Fi signal arc -->
     <path
-        android:fillColor="#B3243B"
-        android:pathData="M51,38h6v42h-6z" />
-    <!-- Horizontal ribbon -->
+        android:pathData="M41.98,54.98 A17,17 0 0,1 66.02,54.98"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.4" />
+    <!-- Inner Wi-Fi signal arc -->
     <path
-        android:fillColor="#B3243B"
-        android:pathData="M34,58h40v6h-40z" />
-    <!-- Bow left -->
+        android:pathData="M47.07,60.07 A9.8,9.8 0 0,1 60.93,60.07"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.4" />
+    <!-- Wi-Fi origin node -->
     <path
-        android:fillColor="#EE6A80"
-        android:pathData="M51,36 C45,30 38,32 44,38 C48,42 51,38 51,36 Z" />
-    <!-- Bow right -->
-    <path
-        android:fillColor="#EE6A80"
-        android:pathData="M57,36 C63,30 70,32 64,38 C60,42 57,38 57,36 Z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M50.4,67 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0" />
 </vector>

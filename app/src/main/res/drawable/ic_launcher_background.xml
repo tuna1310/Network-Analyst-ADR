@@ -4,7 +4,26 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Deep tech navy background -->
     <path
-        android:fillColor="#0F4A35"
+        android:fillColor="#091A32"
         android:pathData="M0,0h108v108h-108z" />
+    <!-- Subtle outer radar glow disk -->
+    <path
+        android:fillColor="#0D2B52"
+        android:pathData="M8,54 a46,46 0 1,0 92,0 a46,46 0 1,0 -92,0" />
+    <!-- Radar crosshair grid -->
+    <path
+        android:pathData="M54,18 L54,90 M18,54 L90,54"
+        android:strokeColor="#164273"
+        android:strokeWidth="0.9" />
+    <!-- Concentric radar rings -->
+    <path
+        android:pathData="M20,54 a34,34 0 1,0 68,0 a34,34 0 1,0 -68,0"
+        android:strokeColor="#164273"
+        android:strokeWidth="1.1" />
+    <path
+        android:pathData="M32,54 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:strokeColor="#1B5299"
+        android:strokeWidth="1.0" />
 </vector>
